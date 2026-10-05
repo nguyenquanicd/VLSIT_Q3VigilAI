@@ -146,7 +146,9 @@ func run(exe, dataDir string, fallback, noTray bool) error {
 	go func() {
 		if p := a.currentProvider(); p != nil {
 			err := ai.Check(ctx, p)
-			if ctx.Err() != nil {
+			// The check takes seconds. If the user switched provider meanwhile,
+			// its result says nothing about the one now in use.
+			if ctx.Err() != nil || a.currentProvider() != p {
 				return
 			}
 			a.eng.ReportAI(err)

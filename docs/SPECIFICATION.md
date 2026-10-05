@@ -931,3 +931,16 @@ Chưa đo: thời gian mở cửa sổ chính (phụ thuộc Edge đã chạy s�
   không hiện thông báo nổi. Lệnh gửi thông báo đã chạy không lỗi và việc bấm vào thông
   báo đã được mô phỏng, nhưng hình thức hiển thị của thông báo chưa được xem.
 - **Bộ dữ liệu vàng** để đo chất lượng phân loại (mục 12) chưa được lập.
+
+### 15.6 Thay đổi sau bản đầu tiên (2026-10-05)
+
+Rút ra từ việc dùng thật; mỗi mục có test.
+
+| Thay đổi | Lý do |
+|---|---|
+| Nút **Gửi thông báo thử** (`POST /api/notify/test`) và thông báo tóm tắt sau mỗi lần bấm **Quét ngay**, hiện cả trong giờ yên lặng | Cảnh báo mức Thông tin không có thông báo nổi theo mặc định, nên một lượt quét có kết quả vẫn có thể không hiện gì: người dùng không phân biệt được với lỗi |
+| Nhật ký ghi lại cảnh báo bị bỏ qua và lý do | Cùng nguyên nhân |
+| Dò Claude CLI cả trong `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\…` | Claude desktop là ứng dụng đóng gói (MSIX): tiến trình bên ngoài nó (mở từ Explorer) không thấy file ở `%APPDATA%` |
+| Kết quả kiểm tra AI lúc khởi động bị bỏ nếu người dùng đã đổi provider trong lúc chờ | Kết quả cũ ghi đè trạng thái của provider mới |
+| `translate="no"` trên trang giao diện | Edge có giao diện tiếng Anh hỏi "Translate page" trên cửa sổ ứng dụng |
+| README có hướng dẫn từng màn hình kèm ảnh chụp thật (`docs/images`) | Yêu cầu tài liệu sử dụng |
