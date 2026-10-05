@@ -1,0 +1,6 @@
+# Build output
+/q3vnlaw.exe
+/dist/
+
+# Runtime data created next to the executable
+/data/
