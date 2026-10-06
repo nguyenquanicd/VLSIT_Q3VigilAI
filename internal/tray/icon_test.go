@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -85,5 +86,22 @@ func TestNotifyIconDataLayout(t *testing.T) {
 	}
 	if got := len(utf16("một chuỗi dài hơn giới hạn cho phép", 10)); got != 10 {
 		t.Errorf("utf16 truncation: %d", got)
+	}
+}
+
+func TestDoubleClickOpensTheWindowOnce(t *testing.T) {
+	var g clickGate
+	t0 := time.Date(2026, 10, 6, 23, 10, 23, 0, time.UTC)
+	if !g.allow(t0) {
+		t.Fatal("the first click must go through")
+	}
+	if g.allow(t0.Add(150 * time.Millisecond)) {
+		t.Error("the second release of a double click opened a second window")
+	}
+	if !g.allow(t0.Add(3 * time.Second)) {
+		t.Error("a later click was swallowed")
+	}
+	if g.allow(t0.Add(3*time.Second + 100*time.Millisecond)) {
+		t.Error("a burst after a later click must be collapsed too")
 	}
 }

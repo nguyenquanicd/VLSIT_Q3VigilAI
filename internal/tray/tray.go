@@ -8,6 +8,7 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -158,6 +159,24 @@ type Tray struct {
 	dirty    bool
 	balloons []Balloon
 	onClick  func() // click handler of the balloon on screen
+
+	clicks clickGate // used on the window thread only
+}
+
+// doubleClickWindow is how close two clicks must be to count as one gesture:
+// a double click on the icon delivers two left-button releases, and opening the
+// window twice for it would put two windows on screen.
+const doubleClickWindow = 800 * time.Millisecond
+
+// clickGate lets the first click of a burst through and drops the rest.
+type clickGate struct{ last time.Time }
+
+func (g *clickGate) allow(now time.Time) bool {
+	if !g.last.IsZero() && now.Sub(g.last) < doubleClickWindow {
+		return false
+	}
+	g.last = now
+	return true
 }
 
 var current *Tray // the window procedure has no user pointer; there is one tray
@@ -258,7 +277,7 @@ func wndProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	case message == wmTray:
 		switch uint32(lParam) & 0xFFFF {
 		case wmLButtonUp:
-			if t.OnClick != nil {
+			if t.OnClick != nil && t.clicks.allow(time.Now()) {
 				go t.OnClick()
 			}
 		case wmRButtonUp, wmContextMenu:
