@@ -1,4 +1,4 @@
-module q3vnlaw
+module q3vigilai
 
 go 1.27
 

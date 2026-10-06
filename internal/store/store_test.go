@@ -14,7 +14,7 @@ func open(t *testing.T) *Store {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(filepath.Join(dir, "q3vnlaw.db"))
+	s, err := Open(filepath.Join(dir, "q3vigilai.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

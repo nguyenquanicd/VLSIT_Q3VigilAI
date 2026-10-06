@@ -12,10 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/sources"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/sources"
+	"q3vigilai/internal/store"
 )
 
 // world is a fake web: news feeds, article pages and the Government portal.
@@ -897,5 +898,48 @@ func TestManualScanAlwaysAnswers(t *testing.T) {
 	w.notif.Test()
 	if len(w.toasts) != 1 || !strings.Contains(w.toasts[0].Title, "thông báo thử") {
 		t.Errorf("test toast: %+v", w.toasts)
+	}
+}
+
+func TestLabelsFollowTheLanguage(t *testing.T) {
+	defer i18n.SetLang(i18n.Vi)
+	i18n.SetLang(i18n.Vi)
+	if SeverityName("warning") != "Cảnh báo" || StatusName("effective") != "Đã có hiệu lực" || StatusName("unknown") != "" {
+		t.Error("Vietnamese labels")
+	}
+	i18n.SetLang(i18n.En)
+	// "Cảnh báo" is the name of the alert level here and of the alerts screen elsewhere.
+	if SeverityName("warning") != "Warning" || i18n.T("Cảnh báo") != "Alerts" {
+		t.Errorf("severity: %q / %q", SeverityName("warning"), i18n.T("Cảnh báo"))
+	}
+	for sev := range SeverityLabel {
+		if n := SeverityName(sev); n == SeverityLabel[sev] {
+			t.Errorf("severity %s has no English name", sev)
+		}
+	}
+	for status, label := range StatusLabel {
+		if label != "" && StatusName(status) == label {
+			t.Errorf("status %s has no English name", status)
+		}
+	}
+	for _, f := range Fields() {
+		if !i18n.Has(f) {
+			t.Errorf("field %q has no English name", f)
+		}
+	}
+}
+
+func TestToastsAreWordedInTheChosenLanguage(t *testing.T) {
+	defer i18n.SetLang(i18n.Vi)
+	var got []Toast
+	n := &Notifier{Show: func(t Toast) { got = append(got, t) }}
+	i18n.SetLang(i18n.En)
+	n.Test()
+	n.ScanSummary(0, 2, 0)
+	if len(got) != 2 || got[0].Title != "Q3VigilAI: test notification" {
+		t.Fatalf("toasts: %+v", got)
+	}
+	if got[1].Title != "Q3VigilAI: scan finished" || !strings.Contains(got[1].Body, "No new news matches") || !strings.Contains(got[1].Body, "2 sources could not be scanned") {
+		t.Errorf("scan summary: %+v", got[1])
 	}
 }

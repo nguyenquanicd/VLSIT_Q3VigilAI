@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/store"
 )
 
 type fake struct {

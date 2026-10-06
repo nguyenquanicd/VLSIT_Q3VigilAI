@@ -1,4 +1,4 @@
-# Q3VNLaw
+# Q3VigilAI
 
 Ứng dụng **portable chạy ngầm ở khay hệ thống Windows**, tự theo dõi thay đổi pháp luật
 Việt Nam từ nguồn chính thống và báo chí chính thống theo các chủ đề bạn đặt, rồi thông
@@ -6,11 +6,17 @@ báo cho bạn. Có thể dùng kèm AI (Claude CLI, Codex CLI, Ollama, Anthropi
 cuối kiểu OpenAI) để tóm tắt và đánh giá mức liên quan; không có AI thì vẫn chạy ở chế
 độ từ khóa.
 
-Một file `q3vnlaw.exe` (khoảng 18 MB), không cần cài đặt, không cần quyền admin.
+Một file `q3vigilai.exe` (khoảng 18 MB), không cần cài đặt, không cần quyền admin. Giao diện,
+menu khay và thông báo có **tiếng Việt và English** (đổi ngay trong ứng dụng), và khi chạy ngầm
+ứng dụng chỉ dùng vài MB RAM (xem [mục 10](#10-chạy-ngầm-nhẹ)).
 
 ![Màn hình Cảnh báo](docs/images/alerts.png)
 
-> Q3VNLaw là công cụ theo dõi và tra cứu, không phải dịch vụ tư vấn pháp lý. Tóm tắt và
+> **Đổi tên:** ứng dụng trước đây tên **Q3VNLaw**. Bản cũ nâng lên bản này vẫn giữ nguyên chủ
+> đề, cảnh báo, văn bản và cài đặt (xem [mục 9](#9-dữ-liệu-và-quyền-riêng-tư)). Tên kho mã
+> nguồn trên GitHub vẫn là `VLSIT_Q3VNLaw_Chat_Bot`.
+
+> Q3VigilAI là công cụ theo dõi và tra cứu, không phải dịch vụ tư vấn pháp lý. Tóm tắt và
 > phân loại có thể sai; tình trạng hiệu lực của văn bản là suy luận. Luôn đối chiếu với
 > văn bản gốc trước khi áp dụng.
 
@@ -25,8 +31,9 @@ Một file `q3vnlaw.exe` (khoảng 18 MB), không cần cài đặt, không cầ
 7. [Cài đặt AI](#7-cài-đặt-ai)
 8. [Xử lý sự cố](#8-xử-lý-sự-cố)
 9. [Dữ liệu và quyền riêng tư](#9-dữ-liệu-và-quyền-riêng-tư)
-10. [Build từ mã nguồn](#10-build-từ-mã-nguồn)
-11. [Giới hạn cần biết](#11-giới-hạn-cần-biết)
+10. [Chạy ngầm nhẹ](#10-chạy-ngầm-nhẹ)
+11. [Build từ mã nguồn](#11-build-từ-mã-nguồn)
+12. [Giới hạn cần biết](#12-giới-hạn-cần-biết)
 
 > Các ảnh chụp trong tài liệu này lấy từ một bản chạy thật ở **chế độ không AI**, nên thẻ
 > cảnh báo có nhãn "Chưa phân loại" và Chat hiện kết quả tìm kiếm. Khi có AI, thẻ có thêm
@@ -36,7 +43,7 @@ Một file `q3vnlaw.exe` (khoảng 18 MB), không cần cài đặt, không cầ
 
 ## 1. Bắt đầu nhanh
 
-1. **Chạy chương trình.** Chép `q3vnlaw.exe` vào một thư mục bất kỳ rồi bấm đúp. Lần đầu,
+1. **Chạy chương trình.** Chép `q3vigilai.exe` vào một thư mục bất kỳ rồi bấm đúp. Lần đầu,
    Windows SmartScreen có thể hỏi vì file chưa ký số: chọn **More info → Run anyway**.
 2. **Tìm biểu tượng.** Chữ **Q** màu xanh xuất hiện ở khay hệ thống (góc phải thanh tác
    vụ). Windows 11 thường xếp biểu tượng mới vào ngăn ẩn: bấm mũi tên **^** cạnh đồng hồ,
@@ -48,6 +55,9 @@ Một file `q3vnlaw.exe` (khoảng 18 MB), không cần cài đặt, không cầ
    thập; cảnh báo xuất hiện ở màn hình **Cảnh báo** sau vài giây đến khoảng một phút (lâu hơn
    nếu bật AI, vì mỗi tin khớp cần một lần gọi AI).
 5. **(Tùy chọn) Bật AI** ở **Cài đặt → AI** (xem [mục 7](#7-cài-đặt-ai)).
+6. **(Tùy chọn) Đổi ngôn ngữ.** Giao diện mặc định là tiếng Việt. Chọn **English** ở ô
+   **Ngôn ngữ** dưới thanh bên (hoặc ở Cài đặt) là toàn bộ cửa sổ, menu khay và thông báo
+   chuyển sang tiếng Anh ngay, không cần khởi động lại.
 
 Từ đó ứng dụng tự quét theo lịch (mặc định 07:00–21:00): báo chí mỗi 1 giờ, cổng văn bản
 của Chính phủ mỗi 3 giờ. Bạn có thể đóng cửa sổ; ứng dụng vẫn chạy ngầm ở khay cho tới khi
@@ -56,6 +66,10 @@ chọn **Thoát**. Bấm **Quét ngay** (góc trên phải) để quét lập t�
 Chạy file lần thứ hai không mở thêm bản mới, chỉ mở lại cửa sổ của bản đang chạy.
 
 Dữ liệu nằm trong thư mục `data\` cạnh file chạy. Xóa cả thư mục là gỡ xong.
+
+![Màn hình Cảnh báo ở chế độ English](docs/images/alerts-en.png)
+
+*Cùng màn hình Cảnh báo sau khi chọn English.*
 
 ---
 
@@ -71,7 +85,7 @@ Dữ liệu nằm trong thư mục `data\` cạnh file chạy. Xóa cả thư m�
 | Chấm vàng góc trên | Có nguồn không quét được (và không có cảnh báo chưa đọc) |
 | Nền xám | Đang tạm dừng thông báo |
 
-Rê chuột lên biểu tượng để xem trạng thái, ví dụ *"Q3VNLaw — 3 cảnh báo chưa đọc"*.
+Rê chuột lên biểu tượng để xem trạng thái, ví dụ *"Q3VigilAI — 3 cảnh báo chưa đọc"*.
 
 **Bấm trái** vào biểu tượng: mở cửa sổ tại màn hình Cảnh báo.
 
@@ -81,13 +95,17 @@ Rê chuột lên biểu tượng để xem trạng thái, ví dụ *"Q3VNLaw —
 
 | Mục | Làm gì |
 |---|---|
-| Mở Q3VNLaw | Mở cửa sổ |
+| Mở Q3VigilAI | Mở cửa sổ |
 | Cảnh báo chưa đọc (N) | Mở màn hình Cảnh báo |
 | Quét ngay | Quét tất cả nguồn đang bật |
 | Tạm dừng thông báo ▸ | 1 giờ, hoặc đến 7 giờ sáng mai; có thêm "Bật lại ngay" khi đang tạm dừng |
 | AI: … | Chỉ để xem: AI đang dùng, hoặc lý do AI không dùng được |
 | Khởi động cùng Windows | Bật/tắt (có dấu tick khi đang bật) |
 | Thoát | Dừng ứng dụng, gỡ biểu tượng |
+
+Menu dùng ngôn ngữ đã chọn; bản English:
+
+![Menu chuột phải, English](docs/images/tray-menu-en.png)
 
 ---
 
@@ -123,18 +141,20 @@ Thông báo (có thể rất nhiều thông báo khi chưa dùng AI).
 
 > Windows có chế độ **Không làm phiền**. Khi biểu tượng chuông ở góc dưới phải có chữ
 > **zZ**, Windows chặn mọi thông báo nổi và chỉ cất vào Trung tâm thông báo (Win + N). Lúc
-> đó Q3VNLaw vẫn gửi thông báo, nhưng bạn không thấy nó.
+> đó Q3VigilAI vẫn gửi thông báo, nhưng bạn không thấy nó.
 
 ---
 
 ## 4. Hướng dẫn từng màn hình
 
 Cửa sổ gồm thanh bên trái (chọn màn hình) và vùng nội dung. Nút **Quét ngay** luôn ở góc
-trên phải. Dưới cùng thanh bên có ba dòng trạng thái:
+trên phải. Dưới cùng thanh bên có các dòng trạng thái:
 
 - **AI**: đang dùng AI nào, hoặc *"Không có AI (chỉ từ khóa)"*, hoặc *"AI lỗi: …"* kèm lý do.
 - **Quét gần nhất**: thời điểm lượt quét trước.
 - **Nguồn lỗi / Thông báo đang tạm im**: chỉ hiện khi có.
+- **Ngôn ngữ**: ô chọn Tiếng Việt / English.
+- **Phiên bản**.
 
 Con số đỏ cạnh **Cảnh báo** là số cảnh báo chưa đọc.
 
@@ -299,7 +319,13 @@ dồn mà gộp thành một.
 
 ### 4.7 Cài đặt
 
-![Cài đặt: lịch quét và thông báo](docs/images/settings.png)
+![Cài đặt: ngôn ngữ, lịch quét và thông báo](docs/images/settings.png)
+
+**Ngôn ngữ**: Tiếng Việt hoặc English, áp dụng cho cửa sổ, menu khay và thông báo; có hiệu lực
+ngay. Tên văn bản, bài báo và từ khóa vẫn là tiếng Việt vì đó là nội dung gốc. Các cảnh báo
+đã tạo giữ nguyên ngôn ngữ lúc tạo; từ khóa của chủ đề phải viết bằng tiếng Việt vì tin cần
+khớp là tin tiếng Việt. Khi chọn English, câu trả lời của AI trong Chat cũng được yêu cầu viết
+bằng tiếng Anh (trích dẫn vẫn nguyên văn tiếng Việt).
 
 **Lịch quét**: khung giờ quét tự động; tần suất cho báo chí và cổng chính thức (áp dụng cho
 mọi nguồn cùng loại); chỉ xét tin trong vòng bao nhiêu ngày; giữ tin không sinh cảnh báo
@@ -316,6 +342,20 @@ lượt quét, thời gian chờ; nút **Lưu cài đặt AI** và **Kiểm tra 
 **Hệ thống**: **Khởi động cùng Windows**, thư mục dữ liệu, **Sao lưu cơ sở dữ liệu ngay**.
 
 ![Cài đặt hệ thống](docs/images/settings-end.png)
+
+### 4.8 Trợ giúp & giới thiệu
+
+Mục cuối thanh bên (và liên kết **Giới thiệu** ở cuối trang Cài đặt).
+
+![Trợ giúp và giới thiệu](docs/images/about.png)
+
+- **Mã nguồn và liên kết**: kho mã nguồn trên GitHub
+  ([nguyenquanicd/VLSIT_Q3VNLaw_Chat_Bot](https://github.com/nguyenquanicd/VLSIT_Q3VNLaw_Chat_Bot)),
+  hướng dẫn sử dụng đầy đủ (README này), nơi báo lỗi hoặc góp ý, và giấy phép Apache 2.0.
+- **Tác giả**: Nguyễn Quân, Nguyễn Lê Ngọc Hân, Claude Sonnet 5.5 Extra.
+- **Trợ giúp nhanh**: các mục thu gọn về bắt đầu nhanh, thông báo không hiện, cách đọc một
+  cảnh báo, bật AI, vị trí dữ liệu, kèm lời nhắc đây không phải tư vấn pháp lý. Thư mục dữ
+  liệu đang dùng cũng được ghi ở cuối trang.
 
 ---
 
@@ -445,7 +485,7 @@ Lưu ý:
 ## 8. Xử lý sự cố
 
 **Không thấy biểu tượng ở khay.** Bấm mũi tên **^** cạnh đồng hồ, biểu tượng có thể đang ở
-ngăn ẩn. Chạy lại file `q3vnlaw.exe` nếu cần: nó chỉ mở lại cửa sổ của bản đang chạy.
+ngăn ẩn. Chạy lại file `q3vigilai.exe` nếu cần: nó chỉ mở lại cửa sổ của bản đang chạy.
 
 **Không thấy thông báo nổi.** Kiểm tra theo thứ tự:
 1. **Cài đặt → Thông báo → Gửi thông báo thử.** Không thấy gì thì lỗi ở Windows: chuông ở góc
@@ -479,7 +519,7 @@ File vẫn được tải về và xem được; để tìm kiếm cần OCR b�
 
 **Cửa sổ ứng dụng hiện hộp thoại của Edge.** Cửa sổ chạy trong hồ sơ Edge của bạn nên có thể
 hiện lời mời đăng nhập, đồng bộ… của Edge. Đây là hộp thoại của Edge, không phải của
-Q3VNLaw; đóng đi là xong.
+Q3VigilAI; đóng đi là xong.
 
 ---
 
@@ -487,7 +527,7 @@ Q3VNLaw; đóng đi là xong.
 
 ```
 data\
-├── q3vnlaw.db        cảnh báo, chủ đề, nguồn, văn bản, chat (SQLite)
+├── q3vigilai.db        cảnh báo, chủ đề, nguồn, văn bản, chat (SQLite)
 ├── docs\<số hiệu>\    PDF gốc tải từ Cổng Chính phủ
 ├── logs\             nhật ký, giữ 14 ngày
 ├── backups\          bản sao lưu, và bản sao tự động trước khi nâng cấp phiên bản
@@ -495,8 +535,16 @@ data\
 ```
 
 - Nếu thư mục cạnh file chạy không ghi được (ví dụ cài trong `Program Files`), ứng dụng tự dùng
-  `%LOCALAPPDATA%\Q3VNLaw` và báo cho bạn.
+  `%LOCALAPPDATA%\Q3VigilAI` và báo cho bạn.
 - Chạy với `--data <thư mục>` để chọn nơi lưu dữ liệu khác.
+- **Nâng từ Q3VNLaw:** chép `q3vigilai.exe` vào đúng thư mục có `data\` cũ (hoặc chạy với
+  `--data` trỏ vào đó). Lần đầu chạy, ứng dụng đổi `q3vnlaw.db` thành `q3vigilai.db` cùng
+  các file đi kèm, giữ nguyên chủ đề, cảnh báo, văn bản và cài đặt; nếu đang bật *Khởi động
+  cùng Windows*, mục khởi động của tên cũ được thay bằng mục mới. Nếu dữ liệu cũ nằm ở
+  `%LOCALAPPDATA%\Q3VNLaw` thì ứng dụng tiếp tục dùng thư mục đó. Đóng bản `q3vnlaw.exe` cũ
+  trước khi chạy bản mới; sau khi xác nhận mọi thứ còn nguyên có thể xóa file `.exe` cũ. Nếu
+  không đổi được tên (bản cũ còn mở tệp), ứng dụng dùng tiếp tệp tên cũ thay vì tạo cơ sở dữ
+  liệu trống.
 - Tin không sinh cảnh báo được xóa sau 30 ngày (đổi được ở Cài đặt). Cảnh báo và văn bản giữ
   tới khi bạn xóa.
 - **Máy chủ cục bộ chỉ nghe trên `127.0.0.1`**, cổng ngẫu nhiên mỗi lần chạy, mọi yêu cầu cần
@@ -512,21 +560,64 @@ data\
 
 ---
 
-## 10. Build từ mã nguồn
+## 10. Chạy ngầm nhẹ
+
+Ứng dụng nằm ở khay cả ngày nên được chỉnh để **ít tốn RAM nhất có thể, đổi lại việc quét
+chậm hơn một chút**: tìm tin mới không cần nhanh, cần nhẹ.
+
+| Tình huống | Trước | Sau |
+|---|---|---|
+| Nghỉ giữa hai lượt quét (cột *Bộ nhớ* trong Task Manager) | 16,7 MB | **2,2 MB** |
+| Đỉnh khi quét 15 nguồn | ~38 MB | **~30 MB** |
+| Đỉnh khi áp dụng chủ đề mới lên tin đã thu thập | 117 MB | **~24 MB** |
+| Thời gian một lượt quét 15 nguồn | ~8 giây | ~12,6 giây |
+
+Số đo trên máy phát triển (Windows 11). Cột *Bộ nhớ* của Task Manager là *working set riêng
+tư*; không phải `WorkingSet64`, vốn tính cả phần dùng chung và cho số lớn hơn. Lần chạy đầu
+tiên của một file `.exe` mới thường cao hơn khoảng 40 MB vì Windows quét file đó; đo ở lần chạy
+thứ hai trở đi.
+
+Cách làm:
+
+- **Trả bộ nhớ cho Windows khi rảnh.** Sau mỗi lượt quét, và cứ 2 phút một lần nếu cửa sổ
+  không được dùng trong phút vừa qua và không có lượt quét nào đang chạy, ứng dụng thu gọn
+  working set. Phần bị thu gọn nằm ở danh sách "standby" của Windows và được nạp lại khi
+  cần, nên lần mở cửa sổ kế tiếp hơi chậm hơn một chút.
+- **Bộ thu rác tích cực hơn** (`GOGC=25`) và chỉ dùng 2 lõi cho Go.
+- **SQLite gọn**: một kết nối, bộ đệm 512 KB, không ánh xạ bộ nhớ, bảng tạm ghi ra đĩa.
+- **Quét ít song song hơn**: chỉ 2 nguồn cùng lúc; đóng các kết nối mạng nhàn rỗi sau mỗi lượt.
+- **Không giữ file lớn trong RAM**: PDF tải về được ghi thẳng ra đĩa và kiểm tra tiêu đề
+  `%PDF-` trên đường đi; việc trích chữ chỉ đọc vài trang đầu, nếu gần như không có chữ thì
+  coi là bản scan và dừng sớm.
+
+---
+
+## 11. Build từ mã nguồn
 
 Cần Go 1.27 trở lên.
 
 ```powershell
-.\build.ps1            # chạy toàn bộ test rồi build q3vnlaw.exe
+.\build.ps1            # chạy toàn bộ test rồi build q3vigilai.exe
 .\build.ps1 -SkipTests # chỉ build
 .\build.ps1 -Live      # chạy thêm test trên các nguồn thật (cần mạng)
 ```
 
 `-Live` là cách kiểm tra nguồn nào đã đổi địa chỉ RSS hay cấu trúc trang.
 
+Cờ dòng lệnh: `--data <thư mục>`, `--no-tray` (chạy không có biểu tượng khay, để kiểm thử),
+`--version`. Đặt biến môi trường `Q3VIGILAI_NO_WINDOW=1` để chạy mà không tự mở cửa sổ.
+
+Mọi chuỗi hiển thị cho người dùng (cả trong Go lẫn JavaScript) lấy câu tiếng Việt làm khóa,
+và `internal/i18n/en.json` ánh xạ sang tiếng Anh. Một test duyệt toàn bộ mã nguồn và **không
+cho build qua nếu có chuỗi chưa có bản dịch**, hoặc bản dịch lệch placeholder `{0}`, `{1}`.
+Thêm chuỗi mới thì thêm một dòng vào `en.json`.
+
 ```
-cmd/q3vnlaw/     chương trình chính: khay, cửa sổ, lắp ráp
+cmd/q3vigilai/     chương trình chính: khay, cửa sổ, lắp ráp
 internal/
+  datadir/       chọn thư mục dữ liệu, chuyển dữ liệu từ tên cũ Q3VNLaw
+  i18n/          tiếng Việt / English: từ điển en.json dùng chung cho Go và giao diện
+  memtrim/       thu gọn working set khi rảnh
   textutil/      bỏ dấu, khớp từ khóa, số hiệu văn bản, trích chữ từ HTML
   store/         SQLite (một file) + tìm toàn văn FTS5
   fetch/         tải web: whitelist tên miền, robots.txt, giới hạn tốc độ
@@ -545,7 +636,7 @@ Chi tiết thiết kế: [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 
 ---
 
-## 11. Giới hạn cần biết
+## 12. Giới hạn cần biết
 
 - **AI chưa được chạy thử với model thật** trong quá trình phát triển: máy phát triển không
   có CLI nào đã đăng nhập và không có khóa API. Các bộ nối được kiểm thử bằng CLI giả và máy
@@ -564,5 +655,8 @@ Chi tiết thiết kế: [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
   yếu và chỉ gồm văn bản đã có trong thư viện.
 - **Nguồn có thể đổi cấu trúc**: khi đó nguồn hiện "Lỗi" hoặc "Nghi hỏng" ở mục Nguồn và ứng
   dụng báo một lần mỗi ngày; nó không im lặng.
+- **Tiếng Anh chỉ áp dụng cho giao diện và thông báo của ứng dụng**, không dịch nội dung tin,
+  văn bản hay tóm tắt đã tạo. Cảnh báo và dòng nhật ký đã ghi giữ nguyên ngôn ngữ lúc tạo; một
+  số thông báo lỗi kỹ thuật trả về từ thư viện bên dưới hoặc từ AI có thể vẫn nguyên văn gốc.
 - **Chỉ Windows 10/11.** File chưa ký số nên SmartScreen có thể cảnh báo ở lần chạy đầu.
 - **Thông báo nổi phụ thuộc Windows**: xem [mục 3](#3-thông-báo) về chế độ Không làm phiền.

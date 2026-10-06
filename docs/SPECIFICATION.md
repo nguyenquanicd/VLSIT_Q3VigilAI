@@ -1,4 +1,4 @@
-# Q3VNLaw — Đặc tả chi tiết (Specification)
+# Q3VigilAI — Đặc tả chi tiết (Specification)
 
 | | |
 |---|---|
@@ -6,7 +6,7 @@
 | Ngày lập | 2026-10-04 |
 | Trạng thái | Đã hiện thực ở phiên bản ứng dụng 0.1.0. Mục 15 ghi hiện trạng, số đo thực tế và các điểm khác thiết kế ban đầu |
 
-Q3VNLaw là một ứng dụng **portable chạy ngầm ở khay hệ thống Windows**, định kỳ quét
+Q3VigilAI là một ứng dụng **portable chạy ngầm ở khay hệ thống Windows**, định kỳ quét
 các nguồn pháp luật chính thống và báo chí chính thống của Việt Nam theo chủ đề người
 dùng đặt, dùng AI (Claude CLI, Codex CLI hoặc model khác) để tóm tắt và đánh giá mức
 liên quan, rồi **thông báo / cảnh báo** cho người dùng. Cửa sổ chat là phần phụ, mở khi
@@ -126,7 +126,7 @@ cuối không cần cài gì.
 ### 3.3 Sơ đồ tổng thể
 
 ```
-┌────────────────────────── q3vnlaw.exe (1 tiến trình) ──────────────────────────┐
+┌────────────────────────── q3vigilai.exe (1 tiến trình) ──────────────────────────┐
 │                                                                                │
 │  Tray ──┬─ menu, trạng thái          HTTP server 127.0.0.1:<cổng ngẫu nhiên>   │
 │         └─ balloon/toast             ├─ /            giao diện web nhúng       │
@@ -143,7 +143,7 @@ cuối không cần cài gì.
 │                                                                                │
 │  Chat service ──► Retrieval (FTS5) ──► AI Provider                             │
 │                                                                                │
-│  Store: data\q3vnlaw.db (SQLite)   data\docs\ (PDF gốc)   data\logs\           │
+│  Store: data\q3vigilai.db (SQLite)   data\docs\ (PDF gốc)   data\logs\           │
 └────────────────────────────────────────────────────────────────────────────────┘
         ▲                                   │
         │ Edge --app / trình duyệt          ▼ chỉ tới tên miền trong whitelist
@@ -158,17 +158,17 @@ cuối không cần cài gì.
 
 | Trạng thái | Biểu tượng | Tooltip |
 |---|---|---|
-| Bình thường | Biểu tượng gốc | `Q3VNLaw — quét gần nhất 07:00, không có tin mới` |
-| Có cảnh báo chưa đọc | Thêm chấm đỏ | `Q3VNLaw — 3 cảnh báo chưa đọc` |
-| Đang quét | Thêm vòng xoay | `Q3VNLaw — đang quét 4/12 nguồn` |
-| Có lỗi | Thêm dấu chấm than vàng | `Q3VNLaw — 2 nguồn quét thất bại` |
-| Tạm dừng | Biểu tượng xám | `Q3VNLaw — tạm dừng đến 09:00` |
+| Bình thường | Biểu tượng gốc | `Q3VigilAI — quét gần nhất 07:00, không có tin mới` |
+| Có cảnh báo chưa đọc | Thêm chấm đỏ | `Q3VigilAI — 3 cảnh báo chưa đọc` |
+| Đang quét | Thêm vòng xoay | `Q3VigilAI — đang quét 4/12 nguồn` |
+| Có lỗi | Thêm dấu chấm than vàng | `Q3VigilAI — 2 nguồn quét thất bại` |
+| Tạm dừng | Biểu tượng xám | `Q3VigilAI — tạm dừng đến 09:00` |
 
 - Bấm trái: mở cửa sổ chính, vào màn hình Cảnh báo.
 - Bấm phải: menu
 
 ```
-Mở Q3VNLaw
+Mở Q3VigilAI
 Cảnh báo chưa đọc (3)
 ──────────────
 Quét ngay
@@ -200,12 +200,12 @@ Quy tắc:
 
 ### 4.3 Cửa sổ chính
 
-Một trang đơn (SPA) có thanh điều hướng trái, giao diện tiếng Việt, hỗ trợ sáng/tối
-theo hệ thống. Kích thước mặc định 1100×720, tối thiểu 800×560.
+Một trang đơn (SPA) có thanh điều hướng trái, giao diện tiếng Việt hoặc English (mục 4.5),
+hỗ trợ sáng/tối theo hệ thống. Kích thước mặc định 1100×720, tối thiểu 800×560.
 
 ```
 ┌──────────────┬──────────────────────────────────────────────┐
-│ Q3VNLaw      │  [thanh tiêu đề màn hình]      [Quét ngay]   │
+│ Q3VigilAI      │  [thanh tiêu đề màn hình]      [Quét ngay]   │
 │              ├──────────────────────────────────────────────┤
 │ ● Cảnh báo 3 │                                              │
 │   Chat       │              nội dung màn hình               │
@@ -214,6 +214,7 @@ theo hệ thống. Kích thước mặc định 1100×720, tối thiểu 800×56
 │   Văn bản    │                                              │
 │   Nhật ký    │                                              │
 │   Cài đặt    │                                              │
+│   Trợ giúp   │                                              │
 ├──────────────┤                                              │
 │ AI: Claude ✓ │                                              │
 │ Quét: 07:00  │                                              │
@@ -295,7 +296,16 @@ báo, số lần gọi AI, thời lượng. Mở từng dòng xem lỗi theo ngu
 | AI | Provider đang dùng (tự dò hoặc chọn tay); đường dẫn CLI; model; khóa API; hạn mức lần gọi mỗi lần quét; nút "Kiểm tra kết nối" |
 | Thông báo | Bật/tắt theo mức; gộp thông báo; âm thanh |
 | Hệ thống | Khởi động cùng Windows; thư mục dữ liệu; thời gian lưu giữ; sao lưu/khôi phục; proxy |
-| Giới thiệu | Phiên bản, giấy phép, tuyên bố miễn trừ |
+| Ngôn ngữ | Tiếng Việt / English, có hiệu lực ngay (mục 4.5) |
+| Giới thiệu | Liên kết tới màn hình Trợ giúp & giới thiệu (mục 4.3.8) |
+
+#### 4.3.8 Trợ giúp & giới thiệu
+
+Màn hình cuối thanh bên. Gồm: tên và phiên bản, mô tả ngắn, giấy phép Apache 2.0; **liên kết
+tới mã nguồn trên GitHub** (kho, README, nơi báo lỗi, giấy phép); **tác giả** (Nguyễn Quân,
+Nguyễn Lê Ngọc Hân, Claude Sonnet 5.5 Extra); các mục trợ giúp nhanh (bắt đầu nhanh, thông
+báo không hiện, đọc một cảnh báo, bật AI, vị trí dữ liệu); tuyên bố miễn trừ; thư mục dữ liệu
+đang dùng. Liên kết mở ở cửa sổ mới (`target=_blank`, `rel="noopener noreferrer"`).
 
 ### 4.4 Kỹ thuật front-end
 
@@ -305,8 +315,8 @@ web/
 ├── css/app.css
 └── js/
     ├── app.js            khởi tạo, định tuyến theo hash (#/alerts, #/chat, …), kết nối SSE
-    ├── lib.js            dựng DOM an toàn, gọi API, định dạng ngày giờ, nhãn tiếng Việt
-    └── views/            alerts.js, chat.js, topics.js, sources.js, docs.js, logs.js, settings.js
+    ├── lib.js            dựng DOM an toàn, gọi API, định dạng ngày giờ, từ điển và hàm dịch `t()`
+    └── views/            alerts.js, chat.js, topics.js, sources.js, docs.js, logs.js, settings.js, about.js
 ```
 
 - Toàn bộ thư mục `web/` được nhúng vào binary lúc build; không tải tài nguyên từ CDN.
@@ -316,6 +326,30 @@ web/
 - Chat streaming qua SSE của chính yêu cầu gửi tin nhắn.
 - Nội dung từ nguồn ngoài (tiêu đề, tóm tắt) luôn chèn dạng văn bản, không chèn HTML.
 
+### 4.5 Ngôn ngữ giao diện (i18n)
+
+Người dùng chọn **Tiếng Việt** hoặc **English** ở thanh bên hoặc ở Cài đặt; lựa chọn lưu ở
+cài đặt `language` (mặc định `vi`) và có hiệu lực ngay, không cần khởi động lại.
+
+- **Kiểu gettext**: câu tiếng Việt trong mã nguồn chính là khóa; `internal/i18n/en.json` ánh
+  xạ khóa sang tiếng Anh. Câu không có bản dịch hiện nguyên văn tiếng Việt, không bao giờ để
+  trống. Placeholder là `{0}`, `{1}`; khóa có ngữ cảnh viết `"ngữ cảnh|câu"` (ví dụ
+  `"mức|Cảnh báo"` = Warning, còn `"Cảnh báo"` = Alerts).
+- **Một từ điển cho cả hai phía**: Go dùng `i18n.T`, `i18n.Err`, `i18n.TC`; giao diện lấy từ
+  điển qua `GET /api/i18n` (tiếng Việt thì từ điển rỗng) rồi dùng `t()`, `tc()`, `N()`.
+  Nhãn khai báo một lần dùng `N()` và được dịch mỗi lần đọc.
+- **Ngôn ngữ toàn tiến trình**: ứng dụng có một người dùng và một cửa sổ; nơi dựng câu thường
+  xa yêu cầu HTTP sinh ra nó. Đổi ngôn ngữ cũng dựng lại menu khay (menu dựng mỗi lần mở),
+  tooltip, thông báo, lỗi API, và trạng thái AI.
+- **Lỗi API** mang mã (`code`) ổn định và câu đã dịch kèm đối số (`message`).
+- **Chat**: khi chọn English, lời nhắc hệ thống yêu cầu AI trả lời bằng tiếng Anh; đoạn trích
+  vẫn nguyên văn tiếng Việt.
+- **Không dịch** nội dung đến từ bên ngoài (tin, văn bản, từ khóa, tên chủ đề do người dùng
+  đặt); cảnh báo và dòng nhật ký đã ghi giữ ngôn ngữ lúc tạo.
+- **Kiểm thử**: một test duyệt mọi chuỗi trong Go và JavaScript và không cho qua nếu thiếu
+  bản dịch hoặc lệch placeholder; tên lĩnh vực, tên nguồn dựng sẵn và nhãn mức/trạng thái có
+  test riêng.
+
 ---
 
 ## 5. Back-end
@@ -323,10 +357,13 @@ web/
 ### 5.1 Cấu trúc mã nguồn
 
 ```
-cmd/q3vnlaw/main.go         khởi động, một phiên bản duy nhất, vòng đời
+cmd/q3vigilai/main.go         khởi động, một phiên bản duy nhất, vòng đời
 internal/
 ├── config/                 đọc/ghi cấu hình, giá trị mặc định
 ├── store/                  SQLite, migration, truy vấn
+├── datadir/                chọn thư mục dữ liệu; chuyển dữ liệu từ tên cũ Q3VNLaw
+├── i18n/                   tiếng Việt / English: từ điển dùng chung cho Go và giao diện
+├── memtrim/                thu gọn working set khi rảnh
 ├── tray/                   biểu tượng, menu, balloon
 ├── server/                 HTTP, REST, SSE, phục vụ web nhúng, xác thực token
 ├── scheduler/              lịch quét, quét bù, tạm dừng
@@ -347,7 +384,10 @@ docs/                       tài liệu
 1. Kiểm tra một phiên bản duy nhất bằng named mutex; nếu đã chạy thì yêu cầu phiên bản
    đang chạy mở cửa sổ rồi thoát.
 2. Xác định thư mục dữ liệu: `data\` cạnh file `.exe`; nếu không ghi được thì dùng
-   `%LOCALAPPDATA%\Q3VNLaw` và báo cho người dùng.
+   `%LOCALAPPDATA%\Q3VigilAI` và báo cho người dùng. Dữ liệu của tên cũ được dùng lại: thư
+   mục `%LOCALAPPDATA%\Q3VNLaw` nếu có, và `q3vnlaw.db` cùng tệp `-wal`, `-shm` được đổi tên
+   thành `q3vigilai.db`; nếu một bước đổi tên thất bại thì hoàn lại và dùng tiếp tên cũ, để
+   không tạo cơ sở dữ liệu trống bên cạnh.
 3. Mở SQLite, chạy migration.
 4. Khởi động HTTP server ở `127.0.0.1`, cổng ngẫu nhiên, sinh token phiên.
 5. Dò AI provider.
@@ -414,7 +454,7 @@ type Connector interface {
 
 - **Whitelist tên miền cứng**: yêu cầu tới tên miền ngoài danh sách bị từ chối trong
   code, kể cả khi đến từ chuyển hướng. Mỗi lần chuyển hướng kiểm tra lại.
-- Chỉ HTTPS. User-Agent tự nhận diện rõ là Q3VNLaw kèm phiên bản.
+- Chỉ HTTPS. User-Agent tự nhận diện rõ là Q3VigilAI kèm phiên bản.
 - Tôn trọng `robots.txt` (lưu đệm 24 giờ).
 - Giới hạn tốc độ: tối đa 1 yêu cầu/giây cho mỗi tên miền, không song song trên cùng
   tên miền.
@@ -739,6 +779,8 @@ Tất cả dưới `http://127.0.0.1:<cổng>/api`, yêu cầu header `X-Q3-Toke
 | GET, DELETE | `/chat/sessions/{id}` | Lịch sử, xóa phiên |
 | POST | `/chat/sessions/{id}/messages` | Gửi câu hỏi; phản hồi dạng SSE |
 | GET, PUT | `/settings` | Đọc, ghi cấu hình |
+| GET | `/i18n` | Ngôn ngữ hiện tại và từ điển tiếng Anh (rỗng khi là tiếng Việt) |
+| POST | `/notify/test` | Hiện một thông báo thử, bất kể giờ yên lặng và công tắc từng mức |
 | GET | `/providers` | Các provider dò được và trạng thái |
 | POST | `/providers/test` | Gọi thử provider |
 
@@ -768,13 +810,13 @@ Tất cả dưới `http://127.0.0.1:<cổng>/api`, yêu cầu header `X-Q3-Toke
 ## 9. Đóng gói và triển khai
 
 ```
-Q3VNLaw\
-├── q3vnlaw.exe
+Q3VigilAI\
+├── q3vigilai.exe
 └── data\
-    ├── q3vnlaw.db
+    ├── q3vigilai.db
     ├── config.json            cấu hình tối thiểu cần trước khi mở DB
     ├── docs\<số_hiệu>\         file gốc + metadata.json
-    └── logs\q3vnlaw-YYYYMMDD.log
+    └── logs\q3vigilai-YYYYMMDD.log
 ```
 
 - Portable thật sự: xóa thư mục là gỡ xong. Ngoại lệ duy nhất là mục "Khởi động cùng
@@ -802,6 +844,10 @@ Q3VNLaw\
 
 Các mục tiêu này là đích thiết kế, sẽ được đo ở mốc M5.
 
+Về RAM: số cần theo dõi là cột *Bộ nhớ* của Task Manager, tức *working set riêng tư*, không
+phải `WorkingSet64` (tính cả phần dùng chung). Số đo thực tế và các biện pháp giảm RAM nằm ở
+mục 15.7.
+
 ---
 
 ## 11. Xử lý lỗi
@@ -814,7 +860,7 @@ Các mục tiêu này là đích thiết kế, sẽ được đo ở mốc M5.
 | AI lỗi hoặc hết hạn mức | Lần quét đó chạy chế độ từ khóa; cảnh báo ghi "chưa phân loại"; thử lại ở lần sau |
 | AI trả sai schema | Thử lại 1 lần, rồi bỏ qua AI cho mục tin đó |
 | DB hỏng | Khôi phục từ bản sao lưu gần nhất, báo người dùng |
-| Thư mục dữ liệu không ghi được | Chuyển sang `%LOCALAPPDATA%\Q3VNLaw`, báo người dùng |
+| Thư mục dữ liệu không ghi được | Chuyển sang `%LOCALAPPDATA%\Q3VigilAI`, báo người dùng |
 | Edge không có | Mở bằng trình duyệt mặc định |
 
 Nguyên tắc: **không có tin mới** và **không quét được** phải là hai trạng thái hiển thị
@@ -868,7 +914,7 @@ khác nhau ở mọi nơi.
 ### 15.1 Đã làm
 
 Toàn bộ các mốc M0–M5 của mục 13 đã có mã chạy được: khay hệ thống và thông báo, máy
-chủ cục bộ và giao diện 7 màn hình, 15 nguồn dựng sẵn, chủ đề, lọc từ khóa, bộ nối AI,
+chủ cục bộ và giao diện 8 màn hình (7 màn hình ban đầu và Trợ giúp & giới thiệu), 15 nguồn dựng sẵn, chủ đề, lọc từ khóa, bộ nối AI,
 xác minh với Cổng Chính phủ, thư viện văn bản, theo dõi văn bản đích danh, nhắc ngày
 hiệu lực, chat có trích dẫn, nhật ký, sao lưu.
 
@@ -878,11 +924,16 @@ hiệu lực, chat có trích dẫn, nhật ký, sao lưu.
 
 | Chỉ tiêu | Mục tiêu (mục 10) | Đo được |
 |---|---|---|
-| Dung lượng `q3vnlaw.exe` | ≤ 25 MB | 17,9 MB |
-| RAM khi nghỉ, sau lượt quét đầu | ≤ 40 MB | 35,9 MB (working set); 20 MB ngay sau khi khởi động |
+| Dung lượng `q3vigilai.exe` | ≤ 25 MB | 17,9 MB |
+| RAM khi nghỉ, sau lượt quét đầu | ≤ 40 MB | Bản đầu: 16,7 MB (cột *Bộ nhớ* của Task Manager). Sau tối ưu ngày 2026-10-06: **2,2 MB** (mục 15.7) |
 | CPU khi nghỉ | Xấp xỉ 0% | 0 ms CPU trong 30 giây |
 | Khởi động tới khi máy chủ và khay sẵn sàng | ≤ 1 giây | 0,2 giây |
-| Một lượt quét 15 nguồn, không gọi AI | ≤ 2 phút | 8 giây, 1002 tin mới (lượt đầu) |
+| Một lượt quét 15 nguồn, không gọi AI | ≤ 2 phút | Bản đầu: 8 giây, 1002 tin mới (lượt đầu). Sau tối ưu RAM: ~12,6 giây |
+
+**Đính chính:** bản đầu của mục này ghi "35,9 MB (working set)". Con số đó lấy từ
+`WorkingSet64`, gồm cả phần bộ nhớ dùng chung, nên lớn hơn con số Task Manager hiển thị. Cột
+*Bộ nhớ* của Task Manager là *working set riêng tư* (16,7 MB khi đo lại chính bản đầu). Mọi số RAM
+từ đây đều là working set riêng tư.
 
 Chưa đo: thời gian mở cửa sổ chính (phụ thuộc Edge đã chạy sẵn hay chưa).
 
@@ -907,7 +958,8 @@ Chưa đo: thời gian mở cửa sổ chính (phụ thuộc Edge đã chạy s�
 
 ### 15.4 Kiểm thử đã chạy
 
-- **Tự động, không cần mạng** (`.\build.ps1`): 10 gói, gồm đường ống quét đầu-cuối trên
+- **Tự động, không cần mạng** (`.\build.ps1`): 14 gói (10 gói ban đầu, thêm `datadir`,
+  `i18n`, `memtrim` và `web`; số gói tính đến 2026-10-06), gồm đường ống quét đầu-cuối trên
   web giả (RSS, bài báo, cổng văn bản) và AI giả; CLI giả mô phỏng đúng đầu ra của Claude
   Code 2.1.286 kể cả trường hợp chưa đăng nhập; kiểm tra bảo mật máy chủ (token, Host,
   Origin, CSP, đường dẫn file); bố cục cấu trúc Win32 của biểu tượng khay.
@@ -944,3 +996,41 @@ Rút ra từ việc dùng thật; mỗi mục có test.
 | Kết quả kiểm tra AI lúc khởi động bị bỏ nếu người dùng đã đổi provider trong lúc chờ | Kết quả cũ ghi đè trạng thái của provider mới |
 | `translate="no"` trên trang giao diện | Edge có giao diện tiếng Anh hỏi "Translate page" trên cửa sổ ứng dụng |
 | README có hướng dẫn từng màn hình kèm ảnh chụp thật (`docs/images`) | Yêu cầu tài liệu sử dụng |
+
+### 15.7 Thay đổi ngày 2026-10-06: đổi tên, hai ngôn ngữ, ít RAM, trang Giới thiệu
+
+| Thay đổi | Lý do |
+|---|---|
+| Đổi tên **Q3VNLaw → Q3VigilAI**: module Go, `cmd/q3vigilai`, `q3vigilai.exe`, tên mutex, lớp cửa sổ khay, biến `Q3VIGILAI_NO_WINDOW`, `q3vigilai.db`, thư mục `%LOCALAPPDATA%\Q3VigilAI` | Yêu cầu của người dùng. Tên kho trên GitHub không đổi |
+| Gói `datadir`: dùng lại dữ liệu của tên cũ (thư mục `Q3VNLaw`, tệp `q3vnlaw.db` cùng `-wal`/`-shm` đổi tên có hoàn lại khi lỗi); mục khởi động cùng Windows của tên cũ bị gỡ và thay bằng mục mới | Người dùng nâng cấp không được mất chủ đề, cảnh báo, văn bản |
+| **Hai ngôn ngữ** Tiếng Việt / English (mục 4.5): gói `i18n`, `GET /api/i18n`, cài đặt `language`, menu khay, tooltip, thông báo, lỗi API, nhãn và trạng thái, giao diện 8 màn hình | Yêu cầu của người dùng. Câu tiếng Việt làm khóa để mã nguồn vẫn đọc được và câu chưa dịch không bao giờ trống |
+| Test **không cho build qua nếu thiếu bản dịch** (duyệt mọi chuỗi trong Go và JavaScript, kiểm placeholder); test tên lĩnh vực, nguồn dựng sẵn, nhãn mức và trạng thái, thông báo và API khi đổi ngôn ngữ | Một chuỗi tiếng Việt lọt vào bản tiếng Anh sẽ không ai thấy cho tới khi người dùng gặp |
+| Test cân bằng ngoặc cho mọi tệp `web/js` (`web/web_test.go`) | Giao diện không có bước build hay trình kiểm tra JavaScript; thiếu một dấu `)` ở `topics.js` làm trắng cả cửa sổ và chỉ lộ khi mở trang thật |
+| Màn hình **Trợ giúp & giới thiệu** (mục 4.3.8): liên kết kho GitHub, tác giả, trợ giúp nhanh | Yêu cầu của người dùng |
+| **Giảm RAM khi chạy ngầm** (bảng dưới) | Yêu cầu: tìm tin không cần nhanh, cần ít tốn tài nguyên |
+
+**Số đo RAM** (cột *Bộ nhớ* của Task Manager = working set riêng tư; máy phát triển, Windows 11;
+lần chạy đầu tiên của một `.exe` mới cao hơn khoảng 40 MB do Windows quét file nên đo ở lần
+thứ hai trở đi):
+
+| Tình huống | Trước | Sau |
+|---|---|---|
+| Nghỉ giữa hai lượt quét | 16,7 MB | 2,2 MB |
+| Đỉnh khi quét 15 nguồn | ~38 MB | ~30 MB |
+| Đỉnh khi áp dụng chủ đề lên tin đã thu thập | 117 MB | ~24 MB |
+| Thời gian một lượt quét 15 nguồn | ~8 giây | ~12,6 giây (chậm hơn khoảng 50%, chấp nhận được) |
+
+**Biện pháp** (mỗi biện pháp có test hoặc số đo):
+
+| Biện pháp | Chi tiết |
+|---|---|
+| Thu gọn working set | Gói `memtrim` gọi `SetProcessWorkingSetSize(-1, -1)`: Windows chuyển các trang sang danh sách standby và nạp lại khi cần. Chạy sau mỗi lượt quét, và cứ 2 phút nếu cửa sổ không được dùng trong phút vừa qua và không có lượt quét nào đang chạy. Dòng stream sự kiện `/api/events` không tính là "đang dùng" vì nó mở suốt khi cửa sổ còn mở |
+| Bộ thu rác và lõi | `debug.SetGCPercent(25)`, `GOMAXPROCS(2)` |
+| SQLite | Một kết nối; `cache_size=-512` (512 KB), `mmap_size=0`, `temp_store=file`. Bộ nhớ SQLite nằm ngoài heap của Go và tính theo từng kết nối |
+| Quét | Tối đa 2 nguồn cùng lúc; đóng kết nối mạng nhàn rỗi sau mỗi lượt (`CloseIdle`) |
+| Tải PDF | Ghi thẳng ra tệp `.part` qua `Options.Sink`, kiểm tra tiêu đề `%PDF-`, rồi đổi tên; không giữ toàn bộ tệp trong RAM |
+| Trích chữ PDF | Đọc thử 3 trang đầu; dưới 60 ký tự chữ thì coi là bản scan và dừng sớm |
+
+**Chưa kiểm chứng:** câu trả lời tiếng Anh của AI trong Chat (lời nhắc có chỉ thị trả lời bằng
+tiếng Anh, nhưng chưa chạy với model thật); giao diện tiếng Anh đã được mở và quét từng màn
+hình để tìm chữ tiếng Việt còn sót, nhưng chưa có người dùng tiếng Anh thật xem lại cách diễn đạt.

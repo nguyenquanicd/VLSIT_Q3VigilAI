@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"q3vnlaw/internal/fetch"
+	"q3vigilai/internal/fetch"
 )
 
 // The live tests reach the real sites. They are skipped unless Q3_LIVE=1,

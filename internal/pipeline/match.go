@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // FieldKeywords maps each selectable field of law to the phrases that

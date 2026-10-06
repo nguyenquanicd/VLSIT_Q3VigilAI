@@ -1,4 +1,4 @@
-// Command q3vnlaw is a portable tray application that watches official
+// Command q3vigilai is a portable tray application that watches official
 // Vietnamese legal sources and the licensed press for changes relevant to
 // the user's topics, and alerts the user.
 package main
@@ -14,6 +14,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,21 +24,28 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/chat"
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/pipeline"
-	"q3vnlaw/internal/server"
-	"q3vnlaw/internal/sources"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/tray"
-	"q3vnlaw/web"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/chat"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/memtrim"
+	"q3vigilai/internal/pipeline"
+	"q3vigilai/internal/server"
+	"q3vigilai/internal/sources"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/tray"
+	"q3vigilai/web"
+
+	"q3vigilai/internal/datadir"
 )
 
 // Version is the application version.
 const Version = "0.1.0"
 
 const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
+
+// legacyRunValue is the startup entry the app wrote under its former name.
+const legacyRunValue = "Q3VNLaw"
 
 // Menu command ids.
 const (
@@ -70,14 +79,20 @@ func main() {
 	showVersion := flag.Bool("version", false, "in phiên bản rồi thoát")
 	flag.Parse()
 	if *showVersion {
-		fmt.Println("Q3VNLaw " + Version)
+		fmt.Println("Q3VigilAI " + Version)
 		return
 	}
+	// This program idles for hours between short bursts of work, so it is tuned
+	// for a small footprint rather than speed: collect garbage when the heap
+	// has grown by a quarter (the default is a doubling), and use two cores at
+	// most, which also caps how many per-core caches the runtime keeps.
+	debug.SetGCPercent(25)
+	runtime.GOMAXPROCS(2)
 	exe, _ := os.Executable()
-	dataDir, fallback := resolveDataDir(*dataFlag, exe)
+	dataDir, fallback := datadir.Resolve(*dataFlag, exe)
 	logFile := setupLog(dataDir)
 	defer logFile.Close()
-	log.Printf("Q3VNLaw %s khởi động, dữ liệu tại %s", Version, dataDir)
+	log.Printf("Q3VigilAI %s khởi động, dữ liệu tại %s", Version, dataDir)
 
 	// One instance per data folder. A second launch asks the first one to
 	// show its window and exits.
@@ -88,18 +103,19 @@ func main() {
 	}
 	if err := run(exe, dataDir, fallback, *noTray); err != nil {
 		log.Printf("lỗi nghiêm trọng: %v", err)
-		fatalBox("Q3VNLaw không khởi động được:\n" + err.Error())
+		fatalBox(i18n.T("Q3VigilAI không khởi động được:\n{0}", err.Error()))
 		os.Exit(1)
 	}
 }
 
 func run(exe, dataDir string, fallback, noTray bool) error {
 	backupBeforeUpgrade(dataDir)
-	st, err := store.Open(filepath.Join(dataDir, "q3vnlaw.db"))
+	st, err := store.Open(datadir.DBPath(dataDir))
 	if err != nil {
-		return fmt.Errorf("không mở được cơ sở dữ liệu: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("không mở được cơ sở dữ liệu"), err)
 	}
 	defer st.Close()
+	i18n.SetLang(st.Setting("language")) // before anything that builds a message
 	os.WriteFile(filepath.Join(dataDir, "version.txt"), []byte(Version), 0o644)
 	if err := sources.Sync(st); err != nil {
 		return err
@@ -117,11 +133,18 @@ func run(exe, dataDir string, fallback, noTray bool) error {
 	a.eng.Emit = a.srv.Broadcast
 	a.srv.TopicSaved = func(id int64) { go a.sched.Backfill(context.Background(), id) }
 	a.reloadAI()
+	// A user who had "start with Windows" on under the former name keeps it.
+	if k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE); err == nil {
+		if _, _, err := k.GetStringValue(legacyRunValue); err == nil {
+			st.SetSettings(map[string]string{"autostart": "1"})
+		}
+		k.Close()
+	}
 	if st.Setting("autostart") == "1" {
-		a.setAutostart(true) // the folder may have moved since last run
+		a.setAutostart(true) // the folder may have moved since last run; also drops the former name's entry
 	}
 	if err := a.srv.Listen(); err != nil {
-		return fmt.Errorf("không mở được cổng cục bộ: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("không mở được cổng cục bộ"), err)
 	}
 	runtimeFile := filepath.Join(dataDir, "runtime.json")
 	info, _ := json.Marshal(map[string]any{"port": a.srv.Port(), "token": a.srv.Token, "pid": os.Getpid(), "url": a.srv.URL("")})
@@ -140,6 +163,23 @@ func run(exe, dataDir string, fallback, noTray bool) error {
 	go func() {
 		defer wg.Done()
 		a.sched.Run(ctx)
+	}()
+	// While nobody uses the window and no scan runs, give the resident memory
+	// back to Windows every two minutes. It is not freed, only moved to the
+	// standby list, and comes back by itself on the next touch.
+	go func() {
+		t := time.NewTicker(2 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if a.srv.IdleFor() > time.Minute && !a.eng.Running() {
+					memtrim.Trim()
+				}
+			}
+		}
 	}()
 	// One small call at start-up tells the user right away when the AI found
 	// on the machine cannot be used (typically: the CLI is not signed in).
@@ -163,18 +203,18 @@ func run(exe, dataDir string, fallback, noTray bool) error {
 		log.Printf("chạy không khay tại %s", a.srv.URL(""))
 		waitForStopFile(dataDir)
 	} else {
-		a.tray = tray.New("Q3VNLaw")
+		a.tray = tray.New("Q3VigilAI")
 		a.tray.OnClick = func() { a.openWindow("alerts") }
 		a.tray.Menu = a.menu
 		a.tray.OnCommand = a.command
 		a.refreshTray()
 		if fallback {
-			a.tray.Notify(tray.Balloon{Title: "Q3VNLaw", Level: "system",
-				Body: "Không ghi được vào thư mục cạnh file chạy, dữ liệu được lưu tại " + dataDir})
+			a.tray.Notify(tray.Balloon{Title: "Q3VigilAI", Level: "system",
+				Body: i18n.T("Không ghi được vào thư mục cạnh file chạy, dữ liệu được lưu tại {0}", dataDir)})
 		}
 		if topics, _ := st.Topics(false); len(topics) == 0 {
-			a.tray.Notify(tray.Balloon{Title: "Q3VNLaw đang chạy ở khay hệ thống", Level: "info",
-				Body:    "Bấm vào đây để tạo chủ đề pháp luật đầu tiên cần theo dõi.",
+			a.tray.Notify(tray.Balloon{Title: i18n.T("Q3VigilAI đang chạy ở khay hệ thống"), Level: "info",
+				Body:    i18n.T("Bấm vào đây để tạo chủ đề pháp luật đầu tiên cần theo dõi."),
 				OnClick: func() { a.openWindow("topics") }})
 		}
 		if err := a.tray.Run(); err != nil {
@@ -197,48 +237,18 @@ func run(exe, dataDir string, fallback, noTray bool) error {
 
 // ---- data folder, log, single instance -------------------------------------
 
-// resolveDataDir prefers "data" next to the executable, which is what makes
-// the app portable; if that is not writable it falls back to the user's
-// local application data.
-func resolveDataDir(flagValue, exe string) (dir string, fallback bool) {
-	if flagValue != "" {
-		abs, _ := filepath.Abs(flagValue)
-		os.MkdirAll(abs, 0o755)
-		return abs, false
-	}
-	dir = filepath.Join(filepath.Dir(exe), "data")
-	if writable(dir) {
-		return dir, false
-	}
-	dir = filepath.Join(os.Getenv("LOCALAPPDATA"), "Q3VNLaw")
-	os.MkdirAll(dir, 0o755)
-	return dir, true
-}
-
-func writable(dir string) bool {
-	if os.MkdirAll(dir, 0o755) != nil {
-		return false
-	}
-	probe := filepath.Join(dir, ".write-test")
-	if os.WriteFile(probe, []byte("x"), 0o644) != nil {
-		return false
-	}
-	os.Remove(probe)
-	return true
-}
-
 func setupLog(dataDir string) *os.File {
 	dir := filepath.Join(dataDir, "logs")
 	os.MkdirAll(dir, 0o755)
 	// Logs older than two weeks are removed.
-	if old, err := filepath.Glob(filepath.Join(dir, "q3vnlaw-*.log")); err == nil {
+	if old, err := filepath.Glob(filepath.Join(dir, "*.log")); err == nil {
 		for _, p := range old {
 			if fi, err := os.Stat(p); err == nil && time.Since(fi.ModTime()) > 14*24*time.Hour {
 				os.Remove(p)
 			}
 		}
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "q3vnlaw-"+time.Now().Format("20060102")+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(filepath.Join(dir, "q3vigilai-"+time.Now().Format("20060102")+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return os.Stderr
 	}
@@ -249,7 +259,7 @@ func setupLog(dataDir string) *os.File {
 // backupBeforeUpgrade copies the database aside when a different version of
 // the app last used this data folder, before any schema migration runs.
 func backupBeforeUpgrade(dataDir string) {
-	db := filepath.Join(dataDir, "q3vnlaw.db")
+	db := filepath.Join(dataDir, datadir.DBName)
 	prev, _ := os.ReadFile(filepath.Join(dataDir, "version.txt"))
 	if _, err := os.Stat(db); err != nil || string(prev) == Version || len(prev) == 0 {
 		return
@@ -273,7 +283,7 @@ func backupBeforeUpgrade(dataDir string) {
 var instanceMutex windows.Handle
 
 func acquireInstance(dataDir string) bool {
-	name, _ := windows.UTF16PtrFromString(`Local\Q3VNLaw-` + strings.NewReplacer(`\`, "_", ":", "_", "/", "_").Replace(strings.ToLower(dataDir)))
+	name, _ := windows.UTF16PtrFromString(`Local\Q3VigilAI-` + strings.NewReplacer(`\`, "_", ":", "_", "/", "_").Replace(strings.ToLower(dataDir)))
 	h, err := windows.CreateMutex(nil, false, name)
 	if err == windows.ERROR_ALREADY_EXISTS {
 		return false
@@ -318,7 +328,7 @@ func waitForStopFile(dataDir string) {
 
 func fatalBox(text string) {
 	t, _ := windows.UTF16PtrFromString(text)
-	c, _ := windows.UTF16PtrFromString("Q3VNLaw")
+	c, _ := windows.UTF16PtrFromString("Q3VigilAI")
 	windows.MessageBox(0, t, c, windows.MB_ICONERROR)
 }
 
@@ -363,13 +373,15 @@ func (a *app) setAutostart(on bool) error {
 		return err
 	}
 	defer k.Close()
+	// The former name of the app left its own startup entry; it must not stay.
+	k.DeleteValue(legacyRunValue)
 	if !on {
-		if err := k.DeleteValue("Q3VNLaw"); err != nil && err != registry.ErrNotExist {
+		if err := k.DeleteValue("Q3VigilAI"); err != nil && err != registry.ErrNotExist {
 			return err
 		}
 		return nil
 	}
-	return k.SetStringValue("Q3VNLaw", `"`+a.exe+`"`)
+	return k.SetStringValue("Q3VigilAI", `"`+a.exe+`"`)
 }
 
 func findEdge() string {
@@ -390,7 +402,7 @@ func findEdge() string {
 func (a *app) openWindow(view string) {
 	log.Printf("mở cửa sổ: %q", view)
 	// Tests set this to exercise the tray without putting windows on screen.
-	if os.Getenv("Q3VNLAW_NO_WINDOW") != "" {
+	if os.Getenv("Q3VIGILAI_NO_WINDOW") != "" {
 		return
 	}
 	u := a.srv.URL(view)
@@ -445,24 +457,24 @@ func (a *app) refreshTray() {
 	}
 	paused := time.Now().Before(store.ParseTime(a.st.Setting("pause_until")))
 	st := tray.State{Unread: unread > 0, Scanning: a.eng.Running(), Problem: failing > 0, Paused: paused}
-	tip := "Q3VNLaw"
+	tip := "Q3VigilAI"
 	switch {
 	case st.Scanning:
-		tip += " — đang quét nguồn"
+		tip += " — " + i18n.T("đang quét nguồn")
 	case unread > 0:
-		tip += fmt.Sprintf(" — %d cảnh báo chưa đọc", unread)
+		tip += " — " + i18n.T("{0} cảnh báo chưa đọc", unread)
 	default:
 		if scans, _ := a.st.Scans(1); len(scans) > 0 && scans[0].FinishedAt != "" {
-			tip += " — quét gần nhất " + store.ParseTime(scans[0].FinishedAt).Local().Format("15:04 02/01") + ", không có tin chưa đọc"
+			tip += " — " + i18n.T("quét gần nhất {0}, không có tin chưa đọc", store.ParseTime(scans[0].FinishedAt).Local().Format("15:04 02/01"))
 		} else {
-			tip += " — chưa quét lần nào"
+			tip += " — " + i18n.T("chưa quét lần nào")
 		}
 	}
 	if failing > 0 {
-		tip += fmt.Sprintf(" · %d nguồn lỗi", failing)
+		tip += " · " + i18n.T("{0} nguồn lỗi", failing)
 	}
 	if paused {
-		tip += " · đang tạm dừng thông báo"
+		tip += " · " + i18n.T("đang tạm dừng thông báo")
 	}
 	a.tray.SetState(st, tip)
 }
@@ -471,30 +483,30 @@ func (a *app) menu() []tray.Item {
 	unread := a.st.UnreadCount()
 	_, note := a.aiStatus()
 	if e := a.eng.AIError(); e != "" {
-		note = "lỗi – " + e
+		note = i18n.T("lỗi – {0}", e)
 	}
 	if len([]rune(note)) > 70 {
 		note = string([]rune(note)[:70]) + "…"
 	}
-	pause := []tray.Item{{ID: cmdPause1h, Label: "1 giờ"}, {ID: cmdPauseMorning, Label: "Đến 7 giờ sáng mai"}}
+	pause := []tray.Item{{ID: cmdPause1h, Label: i18n.T("1 giờ")}, {ID: cmdPauseMorning, Label: i18n.T("Đến 7 giờ sáng mai")}}
 	if time.Now().Before(store.ParseTime(a.st.Setting("pause_until"))) {
-		pause = append(pause, tray.Item{Separator: true}, tray.Item{ID: cmdResume, Label: "Bật lại ngay"})
+		pause = append(pause, tray.Item{Separator: true}, tray.Item{ID: cmdResume, Label: i18n.T("Bật lại ngay")})
 	}
-	scan := tray.Item{ID: cmdScan, Label: "Quét ngay"}
+	scan := tray.Item{ID: cmdScan, Label: i18n.T("Quét ngay")}
 	if a.eng.Running() {
-		scan = tray.Item{Label: "Đang quét…", Disabled: true}
+		scan = tray.Item{Label: i18n.T("Đang quét…"), Disabled: true}
 	}
 	return []tray.Item{
-		{ID: cmdOpen, Label: "Mở Q3VNLaw"},
-		{ID: cmdAlerts, Label: fmt.Sprintf("Cảnh báo chưa đọc (%d)", unread)},
+		{ID: cmdOpen, Label: i18n.T("Mở Q3VigilAI")},
+		{ID: cmdAlerts, Label: i18n.T("Cảnh báo chưa đọc ({0})", unread)},
 		{Separator: true},
 		scan,
-		{Label: "Tạm dừng thông báo", Sub: pause},
+		{Label: i18n.T("Tạm dừng thông báo"), Sub: pause},
 		{Separator: true},
 		{Label: "AI: " + note, Disabled: true},
-		{ID: cmdAutostart, Label: "Khởi động cùng Windows", Checked: a.st.Setting("autostart") == "1"},
+		{ID: cmdAutostart, Label: i18n.T("Khởi động cùng Windows"), Checked: a.st.Setting("autostart") == "1"},
 		{Separator: true},
-		{ID: cmdQuit, Label: "Thoát"},
+		{ID: cmdQuit, Label: i18n.T("Thoát")},
 	}
 }
 

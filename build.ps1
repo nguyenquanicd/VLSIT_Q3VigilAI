@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Build and test Q3VNLaw.
+    Build and test Q3VigilAI.
 
 .EXAMPLE
-    .\build.ps1            # run the tests, then build q3vnlaw.exe
+    .\build.ps1            # run the tests, then build q3vigilai.exe
     .\build.ps1 -SkipTests # build only
     .\build.ps1 -Live      # also run the tests that reach the real sources
 #>
@@ -38,8 +38,8 @@ if (-not $SkipTests) {
 
 # -H windowsgui: no console window. -s -w and -trimpath: smaller file, no
 # local paths inside it.
-& $go build -trimpath -ldflags '-s -w -H windowsgui' -o q3vnlaw.exe ./cmd/q3vnlaw
+& $go build -trimpath -ldflags '-s -w -H windowsgui' -o q3vigilai.exe ./cmd/q3vigilai
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
 
-$exe = Get-Item .\q3vnlaw.exe
+$exe = Get-Item .\q3vigilai.exe
 Write-Host ("Built {0} ({1:N1} MB)" -f $exe.FullName, ($exe.Length / 1MB))

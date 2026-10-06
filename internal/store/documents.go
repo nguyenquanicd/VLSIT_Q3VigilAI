@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/textutil"
 )
 
 // ---- documents -------------------------------------------------------------
