@@ -11,6 +11,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"q3vigilai/internal/i18n"
 )
 
 var (
@@ -209,7 +211,7 @@ func (t *Tray) Run() error {
 		pSetDpiAwareness.Call(^uintptr(3)) // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 (-4)
 	}
 	inst, _, _ := pGetModuleHandle.Call(0)
-	class, _ := windows.UTF16PtrFromString("Q3VNLawTray")
+	class, _ := windows.UTF16PtrFromString("Q3VigilAITray")
 	wc := wndClassEx{lpfnWndProc: windows.NewCallback(wndProc), hInstance: inst, lpszClassName: class}
 	wc.cbSize = uint32(unsafe.Sizeof(wc))
 	if r, _, err := pRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
@@ -232,7 +234,7 @@ func (t *Tray) Run() error {
 	d := t.data(nifMessage | nifIcon | nifTip)
 	t.mu.Unlock()
 	if r, _, _ := pShellNotifyIcon.Call(nimAdd, uintptr(unsafe.Pointer(d))); r == 0 {
-		return errors.New("không tạo được biểu tượng ở khay hệ thống")
+		return errors.New(i18n.T("không tạo được biểu tượng ở khay hệ thống"))
 	}
 	// State set before the window existed is applied now.
 	pPostMessage.Call(t.hwnd, wmApply, 0, 0)

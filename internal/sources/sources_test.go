@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/store"
 )
 
 const rssSample = `<?xml version="1.0" encoding="UTF-8"?>
@@ -274,5 +275,56 @@ func TestGuessRelationAndHelpers(t *testing.T) {
 			t.Errorf("bad builtin: %+v", b)
 		}
 		keys[b.Key] = true
+	}
+}
+
+func TestDownloadFilesStreamsAndRejectsNonPDF(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			http.NotFound(w, r)
+		case "/files/good.pdf":
+			w.Write([]byte("%PDF-1.7 " + strings.Repeat("data ", 1000)))
+		case "/files/error-page.pdf":
+			w.Write([]byte("<html>Trang lỗi</html>"))
+		case "/files/notes.doc":
+			w.Write([]byte("any bytes are fine for a non-PDF"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	fc := fetch.New()
+	fc.Insecure = true
+	fc.SetAllowed([]string{"127.0.0.1"})
+	dir := filepath.Join(t.TempDir(), "docs", "1_2026")
+	saved, problems := DownloadFiles(context.Background(), fc,
+		[]string{srv.URL + "/files/good.pdf", srv.URL + "/files/error-page.pdf", srv.URL + "/files/notes.doc", srv.URL + "/files/missing.pdf"}, dir)
+	if len(saved) != 2 || saved[0] != "good.pdf" || saved[1] != "notes.doc" {
+		t.Errorf("saved: %v", saved)
+	}
+	if len(problems) != 2 || !strings.Contains(problems[0], "không phải PDF") || !strings.Contains(problems[1], "missing.pdf") {
+		t.Errorf("problems: %v", problems)
+	}
+	entries, _ := os.ReadDir(dir)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if strings.Join(names, ",") != "good.pdf,notes.doc" {
+		t.Errorf("leftover or missing files (no .part may remain): %v", names)
+	}
+	// Downloading again keeps what is there.
+	if again, _ := DownloadFiles(context.Background(), fc, []string{srv.URL + "/files/good.pdf"}, dir); len(again) != 1 {
+		t.Errorf("second download: %v", again)
+	}
+}
+
+func TestBuiltinSourceNamesHaveEnglishNames(t *testing.T) {
+	for _, src := range Builtins() {
+		// A name that is plain ASCII (a brand such as "VnEconomy") reads the same in both languages.
+		if strings.ContainsFunc(src.Name, func(r rune) bool { return r > 127 }) && !i18n.Has(src.Name) {
+			t.Errorf("source %s: no English name for %q", src.Key, src.Name)
+		}
 	}
 }

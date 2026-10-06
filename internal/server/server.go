@@ -17,13 +17,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/chat"
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/pipeline"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/chat"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/pipeline"
+	"q3vigilai/internal/store"
 )
 
 // Server holds what the handlers need.
@@ -57,6 +59,10 @@ type Server struct {
 	port  int
 	ln    net.Listener
 	hub   hub
+
+	// lastUse is the time of the latest request, in Unix nanoseconds. The
+	// memory trimmer leaves the app alone while someone is using it.
+	lastUse atomic.Int64
 }
 
 // NewToken returns a random session token.
@@ -75,6 +81,17 @@ func (s *Server) Listen() error {
 	s.ln = ln
 	s.port = ln.Addr().(*net.TCPAddr).Port
 	return nil
+}
+
+// IdleFor returns how long no request has come in. A server nobody has talked
+// to yet counts from its start.
+func (s *Server) IdleFor() time.Duration {
+	last := s.lastUse.Load()
+	if last == 0 {
+		s.lastUse.CompareAndSwap(0, time.Now().UnixNano())
+		last = s.lastUse.Load()
+	}
+	return time.Since(time.Unix(0, last))
 }
 
 // Port returns the bound port.
@@ -114,11 +131,12 @@ func (s *Server) Broadcast(event string, data any) {
 
 // Handler builds the routes.
 func (s *Server) Handler() http.Handler {
+	s.lastUse.CompareAndSwap(0, time.Now().UnixNano()) // idle is counted from the start
 	mux := http.NewServeMux()
 	api := func(pattern string, h func(http.ResponseWriter, *http.Request) error) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			if !s.authorized(r) {
-				fail(w, http.StatusUnauthorized, "unauthorized", "Phiên làm việc không hợp lệ. Hãy mở Q3VNLaw từ biểu tượng ở khay hệ thống.")
+				fail(w, http.StatusUnauthorized, "unauthorized", i18n.T("Phiên làm việc không hợp lệ. Hãy mở Q3VigilAI từ biểu tượng ở khay hệ thống."))
 				return
 			}
 			if err := h(w, r); err != nil {
@@ -129,6 +147,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /auth", s.handleAuth)
 	api("GET /api/status", s.getStatus)
 	api("GET /api/meta", s.getMeta)
+	api("GET /api/i18n", s.getI18n)
 	api("GET /api/events", s.getEvents)
 	api("POST /api/notify/test", func(w http.ResponseWriter, r *http.Request) error {
 		s.Sched.Notifier.Test()
@@ -183,7 +202,7 @@ func (s *Server) Handler() http.Handler {
 	static := http.FileServerFS(s.Web)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			fail(w, http.StatusNotFound, "not_found", "Không có địa chỉ API này.")
+			fail(w, http.StatusNotFound, "not_found", i18n.T("Không có địa chỉ API này."))
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
@@ -205,12 +224,12 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			}
 		}
 		if !okHost {
-			fail(w, http.StatusForbidden, "bad_host", "Yêu cầu bị từ chối.")
+			fail(w, http.StatusForbidden, "bad_host", i18n.T("Yêu cầu bị từ chối."))
 			return
 		}
 		if o := r.Header.Get("Origin"); o != "" && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if o != "http://"+hosts[0] && o != "http://"+hosts[1] && s.port != 0 {
-				fail(w, http.StatusForbidden, "bad_origin", "Yêu cầu bị từ chối.")
+				fail(w, http.StatusForbidden, "bad_origin", i18n.T("Yêu cầu bị từ chối."))
 				return
 			}
 		}
@@ -218,6 +237,11 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
+		// The live-event stream is a request that never ends and says nothing
+		// about whether anyone is using the app.
+		if r.URL.Path != "/api/events" {
+			s.lastUse.Store(time.Now().UnixNano())
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -236,7 +260,7 @@ func (s *Server) authorized(r *http.Request) bool {
 // token does not stay in the address or the history.
 func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
 	if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("t")), []byte(s.Token)) != 1 {
-		fail(w, http.StatusUnauthorized, "unauthorized", "Liên kết không hợp lệ. Hãy mở Q3VNLaw từ biểu tượng ở khay hệ thống.")
+		fail(w, http.StatusUnauthorized, "unauthorized", i18n.T("Liên kết không hợp lệ. Hãy mở Q3VigilAI từ biểu tượng ở khay hệ thống."))
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: "q3t", Value: s.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
@@ -258,15 +282,24 @@ func isView(v string) bool {
 
 // ---- helpers ---------------------------------------------------------------
 
+// apiError carries a message in the source language plus its arguments; it is
+// worded in the current language only when the reply is written.
 type apiError struct {
 	status  int
 	code    string
 	message string
+	args    []any
 }
 
-func (e *apiError) Error() string { return e.message }
+func (e *apiError) Error() string { return i18n.T(e.message, e.args...) }
 
-func bad(code, message string) error { return &apiError{http.StatusBadRequest, code, message} }
+func apiErr(status int, code, message string, args ...any) error {
+	return &apiError{status, code, message, args}
+}
+
+func bad(code, message string, args ...any) error {
+	return apiErr(http.StatusBadRequest, code, message, args...)
+}
 
 func fail(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -278,11 +311,11 @@ func (s *Server) writeErr(w http.ResponseWriter, err error) {
 	var ae *apiError
 	switch {
 	case errors.As(err, &ae):
-		fail(w, ae.status, ae.code, ae.message)
+		fail(w, ae.status, ae.code, ae.Error())
 	case errors.Is(err, store.ErrNotFound):
-		fail(w, http.StatusNotFound, "not_found", "Không tìm thấy.")
+		fail(w, http.StatusNotFound, "not_found", i18n.T("Không tìm thấy."))
 	case errors.Is(err, pipeline.ErrBusy):
-		fail(w, http.StatusConflict, "busy", "Đang có một lượt quét chạy.")
+		fail(w, http.StatusConflict, "busy", i18n.T("Đang có một lượt quét chạy."))
 	case errors.Is(err, fetch.ErrBlocked):
 		fail(w, http.StatusBadRequest, "source_blocked", err.Error())
 	default:

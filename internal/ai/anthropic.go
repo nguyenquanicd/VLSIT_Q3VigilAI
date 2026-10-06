@@ -8,6 +8,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+
+	"q3vigilai/internal/i18n"
 )
 
 // DefaultAnthropicModel is used when the user sets no model.
@@ -88,7 +90,7 @@ func (a *anthropicAPI) Stream(ctx context.Context, r Request, onDelta func(strin
 		return "", fmt.Errorf("%w (%s)", ErrRefused, message.StopDetails.Category)
 	}
 	if message.StopReason == anthropic.BetaStopReasonMaxTokens && full.Len() == 0 {
-		return "", errors.New("câu trả lời bị cắt do vượt giới hạn độ dài")
+		return "", errors.New(i18n.T("câu trả lời bị cắt do vượt giới hạn độ dài"))
 	}
 	return full.String(), nil
 }
@@ -98,14 +100,14 @@ func anthropicErr(err error) error {
 	if errors.As(err, &apierr) {
 		switch apierr.StatusCode {
 		case 401, 403:
-			return fmt.Errorf("%w: khóa API Anthropic không hợp lệ hoặc không có quyền (HTTP %d)", ErrAuth, apierr.StatusCode)
+			return fmt.Errorf("%w: %s", ErrAuth, i18n.T("khóa API Anthropic không hợp lệ hoặc không có quyền (HTTP {0})", apierr.StatusCode))
 		case 404:
-			return fmt.Errorf("Anthropic API không nhận ra model đã chọn (HTTP 404)")
+			return errors.New(i18n.T("Anthropic API không nhận ra model đã chọn (HTTP 404)"))
 		case 429:
-			return errors.New("Anthropic API đang giới hạn tốc độ, hãy thử lại sau (HTTP 429)")
+			return errors.New(i18n.T("Anthropic API đang giới hạn tốc độ, hãy thử lại sau (HTTP 429)"))
 		default:
-			return fmt.Errorf("Anthropic API lỗi HTTP %d", apierr.StatusCode)
+			return errors.New(i18n.T("Anthropic API lỗi HTTP {0}", apierr.StatusCode))
 		}
 	}
-	return fmt.Errorf("không kết nối được tới Anthropic API: %w", err)
+	return fmt.Errorf("%s: %w", i18n.T("không kết nối được tới Anthropic API"), err)
 }

@@ -5,12 +5,14 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/store"
 )
 
 // Ref is one entry found in a source listing.
@@ -43,7 +45,7 @@ func List(ctx context.Context, fc *fetch.Client, src store.Source) (Listing, err
 	case "vanban":
 		return listVanban(ctx, fc, src)
 	}
-	return Listing{}, fmt.Errorf("bộ nối không hỗ trợ: %s", src.Connector)
+	return Listing{}, errors.New(i18n.T("bộ nối không hỗ trợ: {0}", src.Connector))
 }
 
 // Builtins returns the sources shipped with the app. Every feed address was

@@ -1,6 +1,8 @@
 package extract
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,4 +147,63 @@ func TestPDFTextOnRealPortalFile(t *testing.T) {
 		t.Errorf("articles not recognised: %v", arts)
 	}
 	t.Logf("%d runes, %d chunks: %v", len([]rune(text)), len(chunks), arts)
+}
+
+// minimalPDF builds a valid PDF whose pages are empty except where text is given.
+func minimalPDF(pages []string) []byte {
+	var objs []string
+	kids := make([]string, len(pages))
+	for i := range pages {
+		kids[i] = fmt.Sprintf("%d 0 R", 4+2*i)
+	}
+	objs = append(objs,
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.Join(kids, " "), len(pages)),
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+	for i, text := range pages {
+		content := ""
+		if text != "" {
+			content = "BT /F1 11 Tf 40 700 Td (" + text + ") Tj ET"
+		}
+		objs = append(objs,
+			fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>", 5+2*i),
+			fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(content), content))
+	}
+	var b bytes.Buffer
+	b.WriteString("%PDF-1.4\n")
+	offsets := make([]int, len(objs))
+	for i, o := range objs {
+		offsets[i] = b.Len()
+		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, o)
+	}
+	x := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(objs)+1)
+	for _, off := range offsets {
+		fmt.Fprintf(&b, "%010d 00000 n \n", off)
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, x)
+	return b.Bytes()
+}
+
+func TestPDFTextProbesFirstPagesToSpotScans(t *testing.T) {
+	prose := strings.Repeat("Quy dinh cua cac co quan duoc ap dung theo cac dieu khoan va trong pham vi nghi dinh nay. ", 4)
+	dir := t.TempDir()
+	write := func(name string, pages []string) string {
+		p := filepath.Join(dir, name)
+		os.WriteFile(p, minimalPDF(pages), 0o644)
+		return p
+	}
+	// Text from the first page: read normally.
+	if text, ok := PDFText(write("text.pdf", []string{prose, prose, prose, prose})); !ok || !strings.Contains(text, "nghi dinh nay") {
+		t.Fatalf("a PDF with text on page one was not read: ok=%v %q", ok, text)
+	}
+	// Three blank pages: a scan. It is given up on without reading further, even
+	// though page four has text (the price of not reading all of a 30 MB scan).
+	if text, ok := PDFText(write("scan.pdf", []string{"", "", "", prose})); ok || text != "" {
+		t.Errorf("a scan was not recognised from its first pages: ok=%v %q", ok, text)
+	}
+	// Text that starts on page two or three still counts.
+	if _, ok := PDFText(write("late.pdf", []string{"", prose, prose, prose})); !ok {
+		t.Error("text on the second page was missed")
+	}
 }

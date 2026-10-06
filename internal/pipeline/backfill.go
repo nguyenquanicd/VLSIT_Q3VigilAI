@@ -5,8 +5,9 @@ import (
 	"net/url"
 	"time"
 
-	"q3vnlaw/internal/sources"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/sources"
+	"q3vigilai/internal/store"
 )
 
 // Backfill applies one topic to the items already collected inside the
@@ -39,7 +40,7 @@ func (e *Engine) Backfill(ctx context.Context, topicID int64) (store.Scan, error
 		return store.Scan{}, err
 	}
 	sc := store.Scan{ID: id, Trigger: "backfill", StartedAt: store.Now(), Errors: []store.SourceError{},
-		Note: "Áp dụng chủ đề \"" + t.Name + "\" lên các tin đã thu thập"}
+		Note: i18n.T("Áp dụng chủ đề \"{0}\" lên các tin đã thu thập", t.Name)}
 	e.emit("scan.started", map[string]any{"id": id, "trigger": "backfill"})
 	defer func() {
 		e.St.FinishScan(sc)
@@ -98,7 +99,7 @@ func (e *Engine) Backfill(ctx context.Context, topicID int64) (store.Scan, error
 		e.checkWatched(ctx, st)
 	}
 	if st.provider == nil && e.AIError() != "" {
-		sc.Note += ". AI không dùng được: " + e.AIError()
+		sc.Note += ". " + i18n.T("AI không dùng được: {0}", e.AIError())
 	}
 	return sc, nil
 }

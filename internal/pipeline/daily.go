@@ -2,14 +2,14 @@ package pipeline
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
-	"q3vnlaw/internal/sources"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/sources"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // verifyGiveUp is how long an unconfirmed document number keeps being looked
@@ -206,8 +206,8 @@ func mentions(h sources.Hit, norm string) bool {
 }
 
 var relationLabel = map[string]string{
-	"amends": "sửa đổi, bổ sung", "replaces": "thay thế", "repeals": "bãi bỏ", "guides": "quy định chi tiết, hướng dẫn",
-	"consolidates": "hợp nhất", "mentions": "có nhắc tới",
+	"amends": i18n.N("sửa đổi, bổ sung"), "replaces": i18n.N("thay thế"), "repeals": i18n.N("bãi bỏ"), "guides": i18n.N("quy định chi tiết, hướng dẫn"),
+	"consolidates": i18n.N("hợp nhất"), "mentions": i18n.N("có nhắc tới"),
 }
 
 func (e *Engine) raiseWatched(ctx context.Context, st *scanState, t store.Topic, watched string, h sources.Hit, srcID int64, now time.Time) {
@@ -228,9 +228,9 @@ func (e *Engine) raiseWatched(ctx context.Context, st *scanState, t store.Topic,
 		Title: h.DocNumber + " – " + h.Abstract, MatchedKeywords: []string{watched}, DocNumbers: []string{h.DocNumber},
 		ClusterKey: key, PrimaryItemID: itemID, State: "unread", NeedsNotify: true}
 	rel := sources.GuessRelation(h.Abstract)
-	a.Summary = fmt.Sprintf("Văn bản %s (%s) trên Cổng Chính phủ %s văn bản đang theo dõi %s.", h.DocNumber,
-		h.Issued.Format("02/01/2006"), relationLabel[rel], watched)
-	a.Reason = "Quan hệ được suy ra từ câu chữ của trích yếu, cần đọc văn bản để khẳng định."
+	a.Summary = i18n.T("Văn bản {0} ({1}) trên Cổng Chính phủ {2} văn bản đang theo dõi {3}.", h.DocNumber,
+		h.Issued.Format("02/01/2006"), i18n.T(relationLabel[rel]), watched)
+	a.Reason = i18n.T("Quan hệ được suy ra từ câu chữ của trích yếu, cần đọc văn bản để khẳng định.")
 	if d, _, err := e.SaveOfficial(ctx, h.PortalID, srcID); err == nil {
 		a.DocumentID, a.EffectiveAt = d.ID, d.EffectiveAt
 		if d.EffectiveAt != "" && d.EffectiveAt <= now.Format("2006-01-02") {
@@ -266,7 +266,7 @@ func (e *Engine) remindEffective(st *scanState) {
 		}
 		eff, _ := time.Parse("2006-01-02", d.EffectiveAt)
 		a := store.Alert{TopicID: t.ID, Kind: "effective_soon", Severity: "notice", LegalStatus: "issued", Verified: "confirmed",
-			Title:   fmt.Sprintf("Sắp có hiệu lực từ %s: %s", eff.Format("02/01/2006"), d.DocNumber),
+			Title:   i18n.T("Sắp có hiệu lực từ {0}: {1}", eff.Format("02/01/2006"), d.DocNumber),
 			Summary: strings.TrimSpace(d.Title), EffectiveAt: d.EffectiveAt, DocNumbers: []string{d.DocNumber},
 			DocumentID: d.ID, ClusterKey: "effective:" + d.Norm, State: "unread", NeedsNotify: true}
 		if id, err := e.St.AddAlert(a); err == nil {

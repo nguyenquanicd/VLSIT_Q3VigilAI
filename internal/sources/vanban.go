@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -16,9 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // The Government portal (vanban.chinhphu.vn) is an ASP.NET site without an
@@ -29,7 +31,7 @@ import (
 var VanbanBase = "https://vanban.chinhphu.vn"
 
 // ErrLayout means the portal's page structure no longer matches the parser.
-var ErrLayout = errors.New("cấu trúc trang vanban.chinhphu.vn đã thay đổi, bộ nối cần cập nhật")
+var ErrLayout = i18n.Err("cấu trúc trang vanban.chinhphu.vn đã thay đổi, bộ nối cần cập nhật")
 
 // Hit is one row of a portal listing or search result.
 type Hit struct {
@@ -288,7 +290,7 @@ func ResolveVanban(ctx context.Context, fc *fetch.Client, code string) (*Hit, er
 // VanbanInfo reads the detail page of a document.
 func VanbanInfo(ctx context.Context, fc *fetch.Client, portalID string) (*DocInfo, error) {
 	if _, err := strconv.Atoi(portalID); err != nil {
-		return nil, fmt.Errorf("mã văn bản không hợp lệ: %q", portalID)
+		return nil, errors.New(i18n.T("mã văn bản không hợp lệ: {0}", portalID))
 	}
 	resp, err := fc.Get(ctx, detailURL(portalID), fetch.Options{})
 	if err != nil {
@@ -335,7 +337,7 @@ func ParseVanbanDetail(page, portalID string) (*DocInfo, error) {
 		}
 	}
 	if info.Title == "" && len(info.Meta) == 0 {
-		return nil, fmt.Errorf("không tìm thấy văn bản có mã %s trên cổng", portalID)
+		return nil, errors.New(i18n.T("không tìm thấy văn bản có mã {0} trên cổng", portalID))
 	}
 	if info.DocNumber == "" {
 		return nil, ErrLayout
@@ -371,20 +373,25 @@ func DownloadFiles(ctx context.Context, fc *fetch.Client, fileURLs []string, dir
 			saved = append(saved, name)
 			continue
 		}
-		resp, err := fc.Get(ctx, raw, fetch.Options{MaxBytes: fetch.MaxFile})
-		if err != nil {
-			problems = append(problems, fmt.Sprintf("không tải được %s: %v", name, err))
-			continue
-		}
-		if strings.HasSuffix(strings.ToLower(name), ".pdf") && !strings.HasPrefix(string(resp.Body[:min(5, len(resp.Body))]), "%PDF-") {
-			problems = append(problems, "tệp tải về không phải PDF hợp lệ: "+name)
-			continue
-		}
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			problems = append(problems, err.Error())
 			return
 		}
-		if err := os.WriteFile(target, resp.Body, 0o644); err != nil {
+		// The body goes straight to a temporary file and is renamed once it
+		// proved to be what its name says. A scanned decree can be 30 MB; held
+		// in memory that is three times its size at the peak.
+		sink := &fileSink{path: target + ".part", wantPDF: strings.HasSuffix(strings.ToLower(name), ".pdf")}
+		if _, err := fc.Get(ctx, raw, fetch.Options{MaxBytes: fetch.MaxFile, Sink: sink.open}); err != nil {
+			problems = append(problems, fmt.Sprintf("không tải được %s: %v", name, err))
+			continue
+		}
+		if sink.wantPDF && !sink.isPDF() {
+			os.Remove(sink.path)
+			problems = append(problems, "tệp tải về không phải PDF hợp lệ: "+name)
+			continue
+		}
+		if err := os.Rename(sink.path, target); err != nil {
+			os.Remove(sink.path)
 			problems = append(problems, err.Error())
 			continue
 		}
@@ -392,6 +399,40 @@ func DownloadFiles(ctx context.Context, fc *fetch.Client, fileURLs []string, dir
 	}
 	return
 }
+
+// fileSink writes a download to a temporary file and remembers how it began.
+type fileSink struct {
+	path    string
+	wantPDF bool
+	f       *os.File
+	head    []byte
+}
+
+func (s *fileSink) open() (io.WriteCloser, error) {
+	f, err := os.Create(s.path)
+	if err != nil {
+		return nil, err
+	}
+	s.f, s.head = f, s.head[:0]
+	return s, nil
+}
+
+func (s *fileSink) Write(p []byte) (int, error) {
+	if len(s.head) < 5 {
+		s.head = append(s.head, p[:min(5-len(s.head), len(p))]...)
+	}
+	return s.f.Write(p)
+}
+
+func (s *fileSink) Close() error { return s.f.Close() }
+
+// Abort drops a download that failed half way.
+func (s *fileSink) Abort() {
+	s.f.Close()
+	os.Remove(s.path)
+}
+
+func (s *fileSink) isPDF() bool { return string(s.head) == "%PDF-" }
 
 // GuessRelation reads the standard wording of an abstract to tell how a
 // document acts on another one it names.

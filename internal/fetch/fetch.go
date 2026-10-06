@@ -16,10 +16,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"q3vigilai/internal/i18n"
 )
 
 // UserAgent identifies the app honestly to the sites it reads.
-const UserAgent = "Q3VNLaw/0.1 (Vietnamese legal update monitor; personal use)"
+const UserAgent = "Q3VigilAI/0.1 (Vietnamese legal update monitor; personal use)"
 
 // Size caps for the two kinds of download.
 const (
@@ -28,13 +30,13 @@ const (
 )
 
 // ErrBlocked is returned for a host outside the whitelist or on the blocklist.
-var ErrBlocked = errors.New("tên miền không nằm trong danh sách nguồn được phép")
+var ErrBlocked = i18n.Err("tên miền không nằm trong danh sách nguồn được phép")
 
 // ErrRobots is returned when robots.txt disallows the path.
-var ErrRobots = errors.New("robots.txt của trang không cho phép truy cập tự động đường dẫn này")
+var ErrRobots = i18n.Err("robots.txt của trang không cho phép truy cập tự động đường dẫn này")
 
 // ErrTooLarge is returned when a response exceeds its size cap.
-var ErrTooLarge = errors.New("nội dung vượt quá giới hạn kích thước")
+var ErrTooLarge = i18n.Err("nội dung vượt quá giới hạn kích thước")
 
 // blockedDomains are never fetched, whatever the user configures: social
 // networks, forums and blog hosts are not sources of law.
@@ -104,9 +106,24 @@ type hostState struct {
 func New() *Client {
 	c := &Client{MinDelay: time.Second, RetryDelay: 2 * time.Second, hosts: map[string]*hostState{}}
 	jar, _ := cookiejar.New(nil)
+	// Connections are kept for seconds, not minutes: the app talks to 15 sites
+	// once an hour, and an idle TLS connection holds buffers for nothing.
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          4,
+		MaxIdleConnsPerHost:   1,
+		IdleConnTimeout:       15 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 45 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
 	c.http = &http.Client{
-		Timeout: 60 * time.Second,
-		Jar:     jar,
+		// Covers the whole exchange, so a 30 MB attachment on a slow line fits.
+		Timeout:   5 * time.Minute,
+		Transport: tr,
+		Jar:       jar,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return errors.New("too many redirects")
@@ -117,6 +134,10 @@ func New() *Client {
 	}
 	return c
 }
+
+// CloseIdle drops every idle connection. Called when a scan is over, so
+// nothing stays open between two scans.
+func (c *Client) CloseIdle() { c.http.CloseIdleConnections() }
 
 // SetAllowed replaces the whitelist with the given domains. Subdomains of a
 // whitelisted domain are allowed.
@@ -150,7 +171,7 @@ func (c *Client) Allowed(host string) bool {
 
 func (c *Client) check(u *url.URL) error {
 	if u.Scheme != "https" && !(c.Insecure && u.Scheme == "http") {
-		return fmt.Errorf("%w: chỉ chấp nhận https (%s)", ErrBlocked, u.Redacted())
+		return fmt.Errorf("%w: %s", ErrBlocked, i18n.T("chỉ chấp nhận https ({0})", u.Redacted()))
 	}
 	if !c.Allowed(u.Host) {
 		return fmt.Errorf("%w: %s", ErrBlocked, u.Hostname())
@@ -177,12 +198,19 @@ type Options struct {
 	Form         url.Values
 	UsePost      bool
 	SkipRobots   bool // robots.txt itself, and nothing else
+
+	// Sink, when set, receives the body as it arrives instead of Body holding
+	// it: a 30 MB scanned PDF then costs a few kilobytes of memory, not three
+	// times its size. It is called once per attempt, so a retry starts clean.
+	// A writer that also has an Abort method is aborted when the attempt fails.
+	Sink func() (io.WriteCloser, error)
 }
 
 // Response is a completed fetch.
 type Response struct {
 	Status       int
-	Body         []byte
+	Body         []byte // empty when the request had a Sink
+	Size         int64  // bytes delivered to the Sink
 	ETag         string
 	LastModified string
 	NotModified  bool
@@ -277,9 +305,36 @@ func (c *Client) once(ctx context.Context, u *url.URL, hs *hostState, opt Option
 		out.NotModified = true
 		return out, false, nil
 	case r.StatusCode >= 500:
-		return nil, true, fmt.Errorf("HTTP %d từ %s", r.StatusCode, u.Hostname())
+		return nil, true, errors.New(i18n.T("HTTP {0} từ {1}", r.StatusCode, u.Hostname()))
 	case r.StatusCode >= 400:
-		return nil, false, fmt.Errorf("HTTP %d từ %s", r.StatusCode, u.Hostname())
+		return nil, false, errors.New(i18n.T("HTTP {0} từ {1}", r.StatusCode, u.Hostname()))
+	}
+	if opt.Sink != nil {
+		w, err := opt.Sink()
+		if err != nil {
+			return nil, false, err
+		}
+		abort := func() {
+			if a, ok := w.(interface{ Abort() }); ok {
+				a.Abort()
+			} else {
+				w.Close()
+			}
+		}
+		n, err := io.Copy(w, io.LimitReader(r.Body, opt.MaxBytes+1))
+		switch {
+		case n > opt.MaxBytes:
+			abort()
+			return nil, false, ErrTooLarge
+		case err != nil:
+			abort()
+			return nil, true, err
+		}
+		if err := w.Close(); err != nil {
+			return nil, false, err
+		}
+		out.Size = n
+		return out, false, nil
 	}
 	data, err := io.ReadAll(io.LimitReader(r.Body, opt.MaxBytes+1))
 	if err != nil {
@@ -392,7 +447,7 @@ func parseRobots(body string) *robots {
 			for _, a := range agents {
 				if a == "*" {
 					star = append(star, rule)
-				} else if a == "q3vnlaw" {
+				} else if a == "q3vigilai" {
 					mine = append(mine, rule)
 				}
 			}

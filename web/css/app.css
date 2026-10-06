@@ -140,3 +140,12 @@ tr.click:hover td { background: var(--brand-soft); }
   .chat { grid-template-columns: 1fr; }
   .chat-list { display: none; }
 }
+
+.lang { display: flex; align-items: center; gap: 6px; }
+.lang select { padding: 2px 6px; font-size: 12px; }
+.authors { margin: 0; padding-left: 20px; }
+.authors li { margin: 2px 0; font-weight: 600; }
+details.help { border-top: 1px solid var(--line); padding: 8px 0; }
+details.help:first-of-type { border-top: 0; }
+details.help summary { cursor: pointer; font-weight: 600; }
+details.help p { margin: 6px 0 0; }

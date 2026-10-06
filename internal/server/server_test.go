@@ -17,11 +17,12 @@ import (
 	"testing/fstest"
 	"time"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/chat"
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/pipeline"
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/chat"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/pipeline"
+	"q3vigilai/internal/store"
 )
 
 type env struct {
@@ -80,7 +81,7 @@ func newEnv(t *testing.T) *env {
 	e.s = &Server{St: st, Engine: eng, Fetch: fc, DataDir: dir, Version: "test", Token: NewToken(),
 		Sched: &pipeline.Scheduler{Engine: eng, Notifier: notif, St: st},
 		Chat:  &chat.Service{St: st, Provider: func() ai.Provider { return provider }},
-		Web:   fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>Q3VNLaw</title>")}},
+		Web:   fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>Q3VigilAI</title>")}},
 		AI: func() (ai.Provider, string) {
 			if provider == nil {
 				return nil, "Không tìm thấy AI nào"
@@ -185,7 +186,7 @@ func TestAuthAndGuards(t *testing.T) {
 
 	resp, _ = http.Get(e.ts.URL + "/")
 	page, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 || !strings.Contains(string(page), "Q3VNLaw") {
+	if resp.StatusCode != 200 || !strings.Contains(string(page), "Q3VigilAI") {
 		t.Errorf("index: %d", resp.StatusCode)
 	}
 	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "unsafe-inline") {
@@ -508,5 +509,94 @@ func TestNotifyTestEndpoint(t *testing.T) {
 	}
 	if len(shown) != 1 || !strings.Contains(shown[0].Title, "thông báo thử") {
 		t.Errorf("the test toast must show even during quiet hours: %+v", shown)
+	}
+}
+
+func TestIdleForIgnoresTheEventStream(t *testing.T) {
+	e := newEnv(t)
+	time.Sleep(60 * time.Millisecond)
+	if d := e.s.IdleFor(); d < 50*time.Millisecond {
+		t.Fatalf("a fresh server should count idle from its start: %v", d)
+	}
+	e.call("GET", "/api/status", nil)
+	if d := e.s.IdleFor(); d > 40*time.Millisecond {
+		t.Errorf("a request did not count as use: idle %v", d)
+	}
+	time.Sleep(60 * time.Millisecond)
+	// The stream that stays open for as long as a window does is not "use".
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", e.ts.URL+"/api/events", nil)
+	req.Header.Set("X-Q3-Token", e.s.Token)
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		defer resp.Body.Close()
+	}
+	if d := e.s.IdleFor(); d < 50*time.Millisecond {
+		t.Errorf("opening the event stream reset the idle clock: %v", d)
+	}
+}
+
+func TestLanguageSwitch(t *testing.T) {
+	e := newEnv(t)
+	defer i18n.SetLang(i18n.Vi)
+
+	// Vietnamese is the default and carries no dictionary: the Vietnamese text is the key.
+	_, out := e.call("GET", "/api/i18n", nil)
+	if out["lang"] != "vi" || len(out["dict"].(map[string]any)) != 0 {
+		t.Fatalf("default language: %v", out["lang"])
+	}
+	if _, out = e.call("GET", "/api/settings", nil); out["language"] != "vi" {
+		t.Errorf("language setting default: %v", out["language"])
+	}
+
+	// An unsupported language is refused and nothing changes.
+	if code, out := e.call("PUT", "/api/settings", map[string]string{"language": "fr"}); code != 400 || errCode(out) != "bad_setting" {
+		t.Errorf("language fr accepted: %d %v", code, out)
+	}
+	if i18n.Lang() != i18n.Vi || e.st.Setting("language") != "vi" {
+		t.Error("a refused language was applied")
+	}
+
+	// English applies at once and is remembered.
+	if code, out := e.call("PUT", "/api/settings", map[string]string{"language": "en"}); code != 200 || out["language"] != "en" {
+		t.Fatalf("switch to English: %d %v", code, out)
+	}
+	if i18n.Lang() != i18n.En || e.st.Setting("language") != "en" {
+		t.Error("English was not applied or stored")
+	}
+	_, out = e.call("GET", "/api/i18n", nil)
+	dict := out["dict"].(map[string]any)
+	if out["lang"] != "en" || dict["Thoát"] != "Quit" || len(dict) < 300 {
+		t.Errorf("English dictionary: lang=%v entries=%d", out["lang"], len(dict))
+	}
+
+	// API errors are worded in the chosen language, and with their arguments.
+	code, out := e.call("PUT", "/api/settings", map[string]string{"unknown": "1"})
+	msg := out["error"].(map[string]any)["message"]
+	if code != 400 || msg != "No such setting: unknown" {
+		t.Errorf("English error: %d %v", code, msg)
+	}
+	e.call("PUT", "/api/settings", map[string]string{"language": "vi"})
+	_, out = e.call("PUT", "/api/settings", map[string]string{"unknown": "1"})
+	if msg := out["error"].(map[string]any)["message"]; msg != "Không có cài đặt này: unknown" {
+		t.Errorf("Vietnamese error: %v", msg)
+	}
+	_, out = e.call("GET", "/api/i18n", nil)
+	if len(out["dict"].(map[string]any)) != 0 {
+		t.Error("the Vietnamese UI was sent a dictionary it does not need")
+	}
+}
+
+func TestLanguageReachesTheToasts(t *testing.T) {
+	e := newEnv(t)
+	defer i18n.SetLang(i18n.Vi)
+	var shown []pipeline.Toast
+	e.s.Sched.Notifier.Show = func(t pipeline.Toast) { shown = append(shown, t) }
+	e.call("PUT", "/api/settings", map[string]string{"language": "en"})
+	if code, _ := e.call("POST", "/api/notify/test", nil); code != 200 || len(shown) != 1 {
+		t.Fatalf("notify test: %d %d", code, len(shown))
+	}
+	if shown[0].Title != "Q3VigilAI: test notification" || !strings.HasPrefix(shown[0].Body, "If you can read this") {
+		t.Errorf("toast not in English: %+v", shown[0])
 	}
 }

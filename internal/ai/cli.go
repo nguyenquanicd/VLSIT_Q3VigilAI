@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+
+	"q3vigilai/internal/i18n"
 )
 
 // hidden keeps a console child process from flashing a window: the app
@@ -133,7 +135,7 @@ func cliErr(ctx context.Context, err error, stderr, stdout string) error {
 		return nil
 	}
 	if ctx.Err() == context.DeadlineExceeded {
-		return errors.New("AI không phản hồi trong thời gian cho phép")
+		return errors.New(i18n.T("AI không phản hồi trong thời gian cho phép"))
 	}
 	// Claude reports failures in its JSON result with a non-zero exit code;
 	// let the caller read that instead of the bare exit status.
@@ -147,7 +149,7 @@ func cliErr(ctx context.Context, err error, stderr, stdout string) error {
 	if msg == "" {
 		msg = err.Error()
 	}
-	return fmt.Errorf("CLI lỗi: %s", msg)
+	return errors.New(i18n.T("CLI lỗi: {0}", msg))
 }
 
 // ---- Claude CLI ------------------------------------------------------------
@@ -192,12 +194,12 @@ type claudeResult struct {
 func claudeOutcome(res claudeResult) (string, error) {
 	if res.IsError {
 		if strings.Contains(strings.ToLower(res.Result), "not logged in") || strings.Contains(res.Result, "/login") {
-			return "", fmt.Errorf("%w: Claude CLI chưa đăng nhập. Mở terminal, chạy lệnh claude rồi gõ /login", ErrAuth)
+			return "", fmt.Errorf("%w: %s", ErrAuth, i18n.T("Claude CLI chưa đăng nhập. Mở terminal, chạy lệnh claude rồi gõ /login"))
 		}
 		if strings.Contains(strings.ToLower(res.Result), "invalid api key") {
 			return "", fmt.Errorf("%w: %s", ErrAuth, res.Result)
 		}
-		return "", fmt.Errorf("Claude CLI báo lỗi: %s", res.Result)
+		return "", errors.New(i18n.T("Claude CLI báo lỗi: {0}", res.Result))
 	}
 	return res.Result, nil
 }
@@ -211,7 +213,7 @@ func (c *claudeCLI) Complete(ctx context.Context, r Request) (string, error) {
 	raw, ok := ExtractJSON(out)
 	var res claudeResult
 	if !ok || json.Unmarshal([]byte(raw), &res) != nil || res.Type != "result" {
-		return "", errors.New("không đọc được kết quả từ Claude CLI")
+		return "", errors.New(i18n.T("không đọc được kết quả từ Claude CLI"))
 	}
 	return claudeOutcome(res)
 }
@@ -250,7 +252,7 @@ func (c *claudeCLI) Stream(ctx context.Context, r Request, onDelta func(string))
 		return "", err
 	}
 	if final.Type != "result" {
-		return "", errors.New("Claude CLI kết thúc mà không trả kết quả")
+		return "", errors.New(i18n.T("Claude CLI kết thúc mà không trả kết quả"))
 	}
 	text, err := claudeOutcome(final)
 	if err != nil {
@@ -278,7 +280,7 @@ type codexCLI struct {
 func (c *codexCLI) Name() string { return "codex-cli" }
 
 func (c *codexCLI) Complete(ctx context.Context, r Request) (string, error) {
-	tmp, err := os.CreateTemp("", "q3vnlaw-codex-*.txt")
+	tmp, err := os.CreateTemp("", "q3vigilai-codex-*.txt")
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +306,7 @@ func (c *codexCLI) Complete(ctx context.Context, r Request) (string, error) {
 		return strings.TrimSpace(string(b)), nil
 	}
 	if strings.TrimSpace(out) == "" {
-		return "", errors.New("Codex CLI không trả về nội dung")
+		return "", errors.New(i18n.T("Codex CLI không trả về nội dung"))
 	}
 	return strings.TrimSpace(out), nil
 }

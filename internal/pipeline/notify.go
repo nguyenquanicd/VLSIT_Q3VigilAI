@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // Toast is one desktop notification.
@@ -18,12 +19,24 @@ type Toast struct {
 	AlertID int64  // 0 for digests and system notices
 }
 
-// SeverityLabel and StatusLabel are the Vietnamese names shown to the user.
+// SeverityLabel and StatusLabel hold the names shown to the user, in the source
+// language; read them through SeverityName and StatusName to get the current one.
 var (
-	SeverityLabel = map[string]string{"info": "Thông tin", "notice": "Cần chú ý", "warning": "Cảnh báo"}
-	StatusLabel   = map[string]string{"proposal": "Đề xuất", "draft": "Dự thảo", "issued": "Đã ban hành",
-		"effective": "Đã có hiệu lực", "other": "Tin liên quan", "unknown": ""}
+	SeverityLabel = map[string]string{"info": i18n.N("Thông tin"), "notice": i18n.N("Cần chú ý"), "warning": i18n.N("Cảnh báo")}
+	StatusLabel   = map[string]string{"proposal": i18n.N("Đề xuất"), "draft": i18n.N("Dự thảo"), "issued": i18n.N("Đã ban hành"),
+		"effective": i18n.N("Đã có hiệu lực"), "other": i18n.N("Tin liên quan"), "unknown": ""}
 )
+
+// SeverityName returns the display name of an alert level.
+func SeverityName(sev string) string { return i18n.TC("mức", SeverityLabel[sev]) }
+
+// StatusName returns the display name of a legal status ("" for unknown).
+func StatusName(status string) string {
+	if StatusLabel[status] == "" {
+		return ""
+	}
+	return i18n.T(StatusLabel[status])
+}
 
 // Notifier turns pending alerts into toasts, honouring the user's quiet
 // hours, pause and per-level switches.
@@ -93,16 +106,16 @@ func (n *Notifier) Flush() int {
 
 // AlertToast formats one alert: level and legal status, headline, source.
 func AlertToast(a store.Alert) Toast {
-	tags := []string{SeverityLabel[a.Severity]}
-	if s := StatusLabel[a.LegalStatus]; s != "" {
+	tags := []string{SeverityName(a.Severity)}
+	if s := StatusName(a.LegalStatus); s != "" {
 		tags = append(tags, s)
 	}
 	if a.Verified == "unconfirmed" {
-		tags = append(tags, "chưa xác nhận")
+		tags = append(tags, i18n.T("chưa xác nhận"))
 	}
 	body := a.Title
 	if a.SourceName != "" {
-		body += "\n— " + a.SourceName
+		body += "\n— " + i18n.T(a.SourceName)
 	}
 	return Toast{Title: textutil.Truncate(strings.Join(tags, " · ")+" | "+a.TopicName, 62), Body: textutil.Truncate(body, 250),
 		Level: a.Severity, AlertID: a.ID}
@@ -120,25 +133,25 @@ func digest(list []store.Alert) Toast {
 	var parts []string
 	for _, sev := range []string{"warning", "notice", "info"} {
 		if count[sev] > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", count[sev], strings.ToLower(SeverityLabel[sev])))
+			parts = append(parts, fmt.Sprintf("%d %s", count[sev], strings.ToLower(SeverityName(sev))))
 		}
 	}
 	body := strings.Join(parts, ", ") + ".\n"
 	for i, a := range list {
 		if i == 2 {
-			body += fmt.Sprintf("… và %d tin khác", len(list)-2)
+			body += i18n.T("… và {0} tin khác", len(list)-2)
 			break
 		}
 		body += "• " + textutil.Truncate(a.Title, 90) + "\n"
 	}
-	return Toast{Title: fmt.Sprintf("Q3VNLaw: %d cảnh báo pháp luật mới", len(list)), Body: textutil.Truncate(body, 250), Level: level}
+	return Toast{Title: i18n.T("Q3VigilAI: {0} cảnh báo pháp luật mới", len(list)), Body: textutil.Truncate(body, 250), Level: level}
 }
 
 // Test shows a sample toast whatever the quiet hours and level switches say,
 // so the user can tell whether toasts reach the screen at all.
 func (n *Notifier) Test() {
-	n.Show(Toast{Title: "Q3VNLaw: thông báo thử", Level: "notice",
-		Body: "Nếu bạn thấy dòng này, thông báo của Q3VNLaw hoạt động. Bấm vào đây để mở danh sách cảnh báo."})
+	n.Show(Toast{Title: i18n.T("Q3VigilAI: thông báo thử"), Level: "notice",
+		Body: i18n.T("Nếu bạn thấy dòng này, thông báo của Q3VigilAI hoạt động. Bấm vào đây để mở danh sách cảnh báo.")})
 }
 
 // ScanSummary answers a scan the user asked for. Such a scan must always say
@@ -148,15 +161,15 @@ func (n *Notifier) ScanSummary(alertsNew, sourcesFailed int, shown int) {
 	if shown > 0 && sourcesFailed == 0 {
 		return // real alert toasts already told the story
 	}
-	title, body := "Q3VNLaw: quét xong", ""
+	title, body := i18n.T("Q3VigilAI: quét xong"), ""
 	switch {
 	case alertsNew > 0 && shown == 0:
-		body = fmt.Sprintf("%d cảnh báo mới, nhưng thông báo cho mức này đang tắt. Bấm để xem trong danh sách.", alertsNew)
+		body = i18n.T("{0} cảnh báo mới, nhưng thông báo cho mức này đang tắt. Bấm để xem trong danh sách.", alertsNew)
 	case alertsNew == 0:
-		body = "Không có tin mới khớp các chủ đề đang theo dõi."
+		body = i18n.T("Không có tin mới khớp các chủ đề đang theo dõi.")
 	}
 	if sourcesFailed > 0 {
-		body = strings.TrimSpace(body + fmt.Sprintf(" %d nguồn không quét được, xem mục Nguồn.", sourcesFailed))
+		body = strings.TrimSpace(body + " " + i18n.T("{0} nguồn không quét được, xem mục Nguồn.", sourcesFailed))
 	}
 	n.Show(Toast{Title: title, Body: body, Level: "info"})
 }
@@ -184,8 +197,11 @@ func (n *Notifier) SystemCheck() {
 	if len(bad) == 0 {
 		return
 	}
+	for i := range bad {
+		bad[i] = i18n.T(bad[i])
+	}
 	body := strings.Join(bad, "; ")
-	n.Show(Toast{Title: fmt.Sprintf("Q3VNLaw: %d nguồn không quét được", len(bad)), Level: "system",
-		Body: textutil.Truncate(body+".\nTin từ các nguồn này đang KHÔNG được theo dõi. Mở mục Nguồn để xem lỗi.", 250)})
+	n.Show(Toast{Title: i18n.T("Q3VigilAI: {0} nguồn không quét được", len(bad)), Level: "system",
+		Body: textutil.Truncate(body+".\n"+i18n.T("Tin từ các nguồn này đang KHÔNG được theo dõi. Mở mục Nguồn để xem lỗi."), 250)})
 	n.St.SetSettings(map[string]string{"last_system_notice_at": store.FormatTime(now)})
 }

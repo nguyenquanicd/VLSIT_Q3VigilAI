@@ -11,8 +11,15 @@ import (
 
 	"github.com/ledongthuc/pdf"
 
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
+)
+
+// A PDF whose first probePages pages hold fewer than probeRunes characters of
+// text is treated as a scan.
+const (
+	probePages = 3
+	probeRunes = 60
 )
 
 // PDFText returns the text layer of a PDF. ok is false when the file has no
@@ -36,6 +43,12 @@ func PDFText(path string) (text string, ok bool) {
 	for i := 1; i <= pages && i <= 600; i++ {
 		b.WriteString(pageText(r, i))
 		b.WriteByte('\n')
+		// A scanned document has no text layer. Walking all of a 30 MB scan to
+		// find that out costs more memory than the rest of a scan cycle, so
+		// the first pages decide: with no text on them, stop.
+		if i == probePages && len([]rune(strings.TrimSpace(b.String()))) < probeRunes {
+			return "", false
+		}
 	}
 	text = strings.ReplaceAll(b.String(), "�", "")
 	return text, LooksVietnamese(text)

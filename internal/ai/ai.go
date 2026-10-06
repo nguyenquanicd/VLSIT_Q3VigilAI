@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"q3vigilai/internal/i18n"
 )
 
 // Request is one model call.
@@ -35,10 +37,10 @@ type Provider interface {
 
 // ErrAuth marks a failure that will not fix itself: the provider is not
 // signed in or the key is wrong. Callers stop retrying until settings change.
-var ErrAuth = errors.New("AI chưa được xác thực")
+var ErrAuth = i18n.Err("AI chưa được xác thực")
 
 // ErrRefused marks a reply the model declined to give.
-var ErrRefused = errors.New("mô hình từ chối trả lời")
+var ErrRefused = i18n.Err("mô hình từ chối trả lời")
 
 // Config selects and configures a provider. It mirrors the ai_* settings.
 type Config struct {
@@ -61,14 +63,14 @@ func Build(cfg Config) (Provider, string) {
 	}
 	switch cfg.Provider {
 	case "none":
-		return nil, "AI đang tắt (chế độ chỉ từ khóa)"
+		return nil, i18n.T("AI đang tắt (chế độ chỉ từ khóa)")
 	case "claude-cli":
 		path := cfg.CLIPath
 		if path == "" {
 			path = FindClaude()
 		}
 		if path == "" {
-			return nil, "Không tìm thấy Claude CLI trên máy"
+			return nil, i18n.T("Không tìm thấy Claude CLI trên máy")
 		}
 		return &claudeCLI{path: path, cfg: cfg}, "Claude CLI: " + path
 	case "codex-cli":
@@ -77,39 +79,39 @@ func Build(cfg Config) (Provider, string) {
 			path = FindCodex()
 		}
 		if path == "" {
-			return nil, "Không tìm thấy Codex CLI trên máy"
+			return nil, i18n.T("Không tìm thấy Codex CLI trên máy")
 		}
 		return &codexCLI{path: path, cfg: cfg}, "Codex CLI: " + path
 	case "ollama":
-		return &ollama{cfg: cfg}, "Ollama tại " + ollamaBase(cfg)
+		return &ollama{cfg: cfg}, i18n.T("Ollama tại {0}", ollamaBase(cfg))
 	case "http-openai":
 		if cfg.Model == "" {
-			return nil, "Cần nhập tên model cho điểm cuối kiểu OpenAI"
+			return nil, i18n.T("Cần nhập tên model cho điểm cuối kiểu OpenAI")
 		}
-		return &openAI{cfg: cfg}, "HTTP (kiểu OpenAI): " + openAIBase(cfg)
+		return &openAI{cfg: cfg}, i18n.T("HTTP (kiểu OpenAI): {0}", openAIBase(cfg))
 	case "http-anthropic":
 		if cfg.APIKey == "" {
-			return nil, "Cần nhập khóa API của Anthropic"
+			return nil, i18n.T("Cần nhập khóa API của Anthropic")
 		}
 		return newAnthropic(cfg), "Anthropic API"
 	}
 	// auto: first usable provider in order of preference.
 	if p := FindClaude(); p != "" {
-		return &claudeCLI{path: p, cfg: cfg}, "Tự dò: Claude CLI (" + p + ")"
+		return &claudeCLI{path: p, cfg: cfg}, i18n.T("Tự dò: Claude CLI ({0})", p)
 	}
 	if p := FindCodex(); p != "" {
-		return &codexCLI{path: p, cfg: cfg}, "Tự dò: Codex CLI (" + p + ")"
+		return &codexCLI{path: p, cfg: cfg}, i18n.T("Tự dò: Codex CLI ({0})", p)
 	}
 	if OllamaRunning() {
-		return &ollama{cfg: cfg}, "Tự dò: Ollama"
+		return &ollama{cfg: cfg}, i18n.T("Tự dò: Ollama")
 	}
-	return nil, "Không tìm thấy AI nào trên máy (chế độ chỉ từ khóa)"
+	return nil, i18n.T("Không tìm thấy AI nào trên máy (chế độ chỉ từ khóa)")
 }
 
 // Check makes one tiny call to prove the provider works end to end.
 func Check(ctx context.Context, p Provider) error {
 	if p == nil {
-		return errors.New("chưa có AI nào được cấu hình")
+		return errors.New(i18n.T("chưa có AI nào được cấu hình"))
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -118,7 +120,7 @@ func Check(ctx context.Context, p Provider) error {
 		return err
 	}
 	if strings.TrimSpace(out) == "" {
-		return errors.New("AI trả về nội dung rỗng")
+		return errors.New(i18n.T("AI trả về nội dung rỗng"))
 	}
 	return nil
 }
@@ -259,6 +261,12 @@ Quy tắc bắt buộc:
 
 // ClassifyRequest builds the classification call.
 func ClassifyRequest(in ClassifyInput) Request {
+	system := classifySystem
+	// The summary is read by the user, so it follows the interface language.
+	// Quotes and document numbers stay as they are in the source.
+	if i18n.Lang() == i18n.En {
+		system += "\n- Viết các trường summary, who_is_affected và reason bằng TIẾNG ANH. Giữ nguyên bản tiếng Việt của evidence_quote và số hiệu văn bản."
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Hôm nay: %s\n\nCHỦ ĐỀ THEO DÕI: %s\n", in.Today, in.TopicName)
 	if len(in.TopicKeywords) > 0 {
@@ -282,5 +290,5 @@ func ClassifyRequest(in ClassifyInput) Request {
 		fmt.Fprintf(&b, ", ngày: %s", in.Published)
 	}
 	fmt.Fprintf(&b, ")\n<tai_lieu>\nTiêu đề: %s\n\n%s\n</tai_lieu>\n\nTrả về JSON.", in.Title, in.Text)
-	return Request{System: classifySystem, Prompt: b.String(), JSON: true, MaxTokens: 1500}
+	return Request{System: system, Prompt: b.String(), JSON: true, MaxTokens: 1500}
 }

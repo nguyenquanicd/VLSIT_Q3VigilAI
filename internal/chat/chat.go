@@ -12,9 +12,10 @@ import (
 	"strings"
 	"unicode"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // Service is the chat backend.
@@ -204,7 +205,7 @@ func (s *Service) Retrieve(question string, scope Scope) ([]store.Citation, erro
 		switch c.OwnerKind {
 		case "document":
 			if d, err := s.St.Document(c.OwnerID); err == nil {
-				cit.Label, cit.URL, cit.Tier, cit.Source = d.DocNumber, d.SourceURL, 1, "Cổng Thông tin điện tử Chính phủ"
+				cit.Label, cit.URL, cit.Tier, cit.Source = d.DocNumber, d.SourceURL, 1, i18n.T("Cổng Thông tin điện tử Chính phủ")
 			}
 		case "item":
 			if it, err := s.St.Item(c.OwnerID); err == nil {
@@ -219,7 +220,7 @@ func (s *Service) Retrieve(question string, scope Scope) ([]store.Citation, erro
 	return out, nil
 }
 
-const system = `Bạn là trợ lý tra cứu pháp luật Việt Nam của ứng dụng Q3VNLaw.
+const system = `Bạn là trợ lý tra cứu pháp luật Việt Nam của ứng dụng Q3VigilAI.
 
 Quy tắc bắt buộc:
 - Chỉ trả lời dựa trên các ĐOẠN TRÍCH được đánh số trong tin nhắn. Không dùng kiến thức ngoài các đoạn đó, kể cả khi bạn nghĩ mình biết.
@@ -232,7 +233,7 @@ Quy tắc bắt buộc:
 
 // NoBasis is the fixed answer when nothing was retrieved. The model is not
 // called in that case: with no passages it could only answer from memory.
-const NoBasis = "Tôi không tìm thấy căn cứ nào cho câu hỏi này trong dữ liệu Q3VNLaw đã thu thập. " +
+const NoBasis = "Tôi không tìm thấy căn cứ nào cho câu hỏi này trong dữ liệu Q3VigilAI đã thu thập. " +
 	"Bạn có thể tải văn bản liên quan ở mục Văn bản (nhập số hiệu), hoặc thêm chủ đề theo dõi để dữ liệu được thu thập, rồi hỏi lại."
 
 var reCite = regexp.MustCompile(`\[(\d{1,2})\]`)
@@ -295,12 +296,11 @@ func (s *Service) Ask(ctx context.Context, sessionID int64, question string, onD
 	}
 	switch {
 	case len(cites) == 0:
-		answer.Content = NoBasis
+		answer.Content = i18n.T(NoBasis)
 		onDelta(answer.Content)
 	case provider == nil:
 		// Without a model the chat is a search box: show what matched.
-		answer.Content = fmt.Sprintf("Chưa có AI nào được cấu hình nên tôi không thể soạn câu trả lời. "+
-			"Dưới đây là %d đoạn khớp nhất với câu hỏi trong dữ liệu đã thu thập.", len(cites))
+		answer.Content = i18n.T("Chưa có AI nào được cấu hình nên tôi không thể soạn câu trả lời. Dưới đây là {0} đoạn khớp nhất với câu hỏi trong dữ liệu đã thu thập.", len(cites))
 		for i := range answer.Citations {
 			answer.Citations[i].Used = true
 		}
@@ -309,14 +309,18 @@ func (s *Service) Ask(ctx context.Context, sessionID int64, question string, onD
 		if len(history) > 6 {
 			history = history[len(history)-6:]
 		}
-		text, err := provider.Stream(ctx, ai.Request{System: system, Prompt: buildPrompt(history, cites, question), MaxTokens: 4000}, onDelta)
+		sys := system
+		// The answer is read by the user, so it follows the interface language.
+		if i18n.Lang() == i18n.En {
+			sys += "\n- TRẢ LỜI BẰNG TIẾNG ANH (các đoạn trích vẫn là tiếng Việt; dịch ý khi cần và giữ nguyên số hiệu văn bản)."
+		}
+		text, err := provider.Stream(ctx, ai.Request{System: sys, Prompt: buildPrompt(history, cites, question), MaxTokens: 4000}, onDelta)
 		if err != nil {
 			// The question is already stored; store the failure too so the
 			// conversation shows what happened.
 			// The passages were found regardless of the model, so they are
 			// still shown: the user gets a search result instead of nothing.
-			answer.Content = fmt.Sprintf("Không nhận được câu trả lời từ AI: %v.\n\nDưới đây là %d đoạn khớp nhất với câu hỏi trong dữ liệu đã thu thập.",
-				err, len(cites))
+			answer.Content = i18n.T("Không nhận được câu trả lời từ AI: {0}.\n\nDưới đây là {1} đoạn khớp nhất với câu hỏi trong dữ liệu đã thu thập.", err, len(cites))
 			for i := range answer.Citations {
 				answer.Citations[i].Used = true
 			}
@@ -348,7 +352,7 @@ func Audit(text string, cites []store.Citation) (string, []store.Citation) {
 	})
 	text = strings.TrimSpace(text)
 	if used == 0 {
-		text += "\n\n(Lưu ý: câu trả lời trên không dẫn tới đoạn căn cứ cụ thể nào. Hãy đối chiếu với các đoạn trích bên dưới trước khi sử dụng.)"
+		text += "\n\n" + i18n.T("(Lưu ý: câu trả lời trên không dẫn tới đoạn căn cứ cụ thể nào. Hãy đối chiếu với các đoạn trích bên dưới trước khi sử dụng.)")
 	}
 	return text, out
 }

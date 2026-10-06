@@ -43,11 +43,22 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	u := url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(abs)}
-	dsn := u.String() + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
+	// The app sits idle for hours and nothing here needs to be fast, so every
+	// memory knob is turned toward small: a 512 KB page cache per connection
+	// (the default is 2 MB), no memory-mapped file, and sort/temp data kept on
+	// disk. A search that takes a few milliseconds longer costs nothing.
+	dsn := u.String() + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)" +
+		"&_pragma=cache_size(-512)&_pragma=mmap_size(0)&_pragma=temp_store(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
+	// One connection: SQLite's memory (cache, prepared statements) lives
+	// outside the Go heap and is paid for once per connection. Requests wait
+	// for each other, which is fine for one user. Code must therefore never
+	// run a query while another query's rows are still open.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	s := &Store{db: db, path: abs}
 	if err := s.migrate(); err != nil {
 		db.Close()
@@ -299,6 +310,7 @@ func (s *Store) migrate() error {
 // Defaults lists every setting with its default value. Unknown keys are
 // rejected by SetSettings so the UI cannot store arbitrary data.
 var Defaults = map[string]string{
+	"language":            "vi",    // vi | en: the language of the interface, the tray and the notifications
 	"active_start":        "07:00", // scans run only inside this window
 	"active_end":          "21:00",
 	"quiet_start":         "21:00", // no toast inside this window

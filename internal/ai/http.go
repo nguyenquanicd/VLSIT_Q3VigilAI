@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"q3vigilai/internal/i18n"
 )
 
 var httpClient = &http.Client{}
@@ -30,12 +32,12 @@ func postJSON(ctx context.Context, url, bearer string, body any) (*http.Response
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("không kết nối được tới AI: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("không kết nối được tới AI"), err)
 	}
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 600))
-		err := fmt.Errorf("AI trả về HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		err := errors.New(i18n.T("AI trả về HTTP {0}: {1}", resp.StatusCode, strings.TrimSpace(string(msg))))
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return nil, fmt.Errorf("%w: %v", ErrAuth, err)
 		}
@@ -91,7 +93,7 @@ func (o *ollama) model(ctx context.Context) (string, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, ollamaBase(o.cfg)+"/api/tags", nil)
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("không kết nối được tới Ollama: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.T("không kết nối được tới Ollama"), err)
 	}
 	defer resp.Body.Close()
 	var tags struct {
@@ -100,7 +102,7 @@ func (o *ollama) model(ctx context.Context) (string, error) {
 		} `json:"models"`
 	}
 	if json.NewDecoder(resp.Body).Decode(&tags) != nil || len(tags.Models) == 0 {
-		return "", errors.New("Ollama chưa có model nào; hãy chạy lệnh ollama pull để tải một model")
+		return "", errors.New(i18n.T("Ollama chưa có model nào; hãy chạy lệnh ollama pull để tải một model"))
 	}
 	return tags.Models[0].Name, nil
 }
@@ -137,7 +139,7 @@ func (o *ollama) Stream(ctx context.Context, r Request, onDelta func(string)) (s
 			continue
 		}
 		if ev.Error != "" {
-			return "", errors.New("Ollama báo lỗi: " + ev.Error)
+			return "", errors.New(i18n.T("Ollama báo lỗi: {0}", ev.Error))
 		}
 		if ev.Message.Content != "" {
 			full.WriteString(ev.Message.Content)

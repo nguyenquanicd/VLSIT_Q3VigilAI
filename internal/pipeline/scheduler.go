@@ -3,11 +3,13 @@ package pipeline
 import (
 	"context"
 	"hash/fnv"
-	"runtime/debug"
+	"log"
+	"runtime"
 	"sync"
 	"time"
 
-	"q3vnlaw/internal/store"
+	"q3vigilai/internal/memtrim"
+	"q3vigilai/internal/store"
 )
 
 // Scheduler decides when to scan.
@@ -152,7 +154,12 @@ func (s *Scheduler) afterScan(system bool) {
 	if system {
 		s.Notifier.SystemCheck()
 	}
-	debug.FreeOSMemory()
+	s.Engine.Fetch.CloseIdle()
+	before, after := memtrim.Trim()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	log.Printf("bộ nhớ sau lượt quét: heap Go %.1f MB; tiến trình giữ %d MB trong RAM, sau khi thu hồi còn %d MB; goroutine %d",
+		float64(m.HeapAlloc)/(1<<20), before>>20, after>>20, runtime.NumGoroutine())
 }
 
 // Backfill applies a new or edited topic to the items already collected. It

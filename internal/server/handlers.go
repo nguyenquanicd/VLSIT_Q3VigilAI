@@ -13,12 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/pipeline"
-	"q3vnlaw/internal/sources"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/pipeline"
+	"q3vigilai/internal/sources"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // ---- status ----------------------------------------------------------------
@@ -47,6 +48,16 @@ func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) error {
 		"sources_failing": failing, "topics": len(topics), "data_dir": s.DataDir,
 		"muted": s.Sched.Notifier.Muted(), "pause_until": s.St.Setting("pause_until"),
 	})
+}
+
+// getI18n gives the UI its language and, for English, the dictionary: the UI
+// source text is Vietnamese, so Vietnamese needs no dictionary.
+func (s *Server) getI18n(w http.ResponseWriter, r *http.Request) error {
+	dict := map[string]string{}
+	if i18n.Lang() == i18n.En {
+		dict = i18n.Dict()
+	}
+	return ok(w, map[string]any{"lang": i18n.Lang(), "dict": dict})
 }
 
 func (s *Server) getMeta(w http.ResponseWriter, r *http.Request) error {
@@ -167,14 +178,14 @@ func validateTopic(t *store.Topic) error {
 	t.Fields, t.WatchedDocs = clean(t.Fields), clean(t.WatchedDocs)
 	for _, f := range t.Fields {
 		if _, known := pipeline.FieldKeywords[f]; !known {
-			return bad("topic_field", "Lĩnh vực không có trong danh sách: "+f)
+			return bad("topic_field", "Lĩnh vực không có trong danh sách: {0}", f)
 		}
 	}
 	for i, d := range t.WatchedDocs {
 		// Numbers are stored in their usual upper-case form however they were typed.
 		up := strings.ToUpper(d)
 		if got := textutil.ExtractDocNumbers(up); len(got) != 1 || textutil.NormalizeDocNumber(got[0]) != textutil.NormalizeDocNumber(up) {
-			return bad("topic_doc", "Số hiệu văn bản không đúng dạng (ví dụ 13/2023/NĐ-CP): "+d)
+			return bad("topic_doc", "Số hiệu văn bản không đúng dạng (ví dụ 13/2023/NĐ-CP): {0}", d)
 		}
 		t.WatchedDocs[i] = up
 	}
@@ -186,7 +197,7 @@ func validateTopic(t *store.Topic) error {
 	}
 	for _, k := range t.Kinds {
 		if !validKinds[k] {
-			return bad("topic_kind", "Loại tin không hợp lệ: "+k)
+			return bad("topic_kind", "Loại tin không hợp lệ: {0}", k)
 		}
 	}
 	if t.RemindDays < 0 || t.RemindDays > 90 {
@@ -364,7 +375,7 @@ func (s *Server) probeSource(ctx context.Context, raw string) (*sourceProbe, err
 
 	resp, err := s.Fetch.Get(ctx, u.String(), fetch.Options{})
 	if err != nil {
-		return nil, bad("source_unreachable", "Không đọc được địa chỉ này: "+err.Error())
+		return nil, bad("source_unreachable", "Không đọc được địa chỉ này: {0}", err.Error())
 	}
 	p := &sourceProbe{Domain: domain}
 	var refs []sources.Ref
@@ -477,11 +488,10 @@ func (s *Server) fetchDocument(w http.ResponseWriter, r *http.Request) error {
 	defer cancel()
 	d, err := s.Engine.FetchByNumber(ctx, nums[0])
 	if err == store.ErrNotFound {
-		return &apiError{http.StatusNotFound, "not_on_portal", "Không tìm thấy văn bản số " + nums[0] +
-			" trên Cổng Thông tin điện tử Chính phủ. Cổng này có thể chưa đăng, hoặc không lưu văn bản địa phương và văn bản rất cũ."}
+		return apiErr(http.StatusNotFound, "not_on_portal", "Không tìm thấy văn bản số {0} trên Cổng Thông tin điện tử Chính phủ. Cổng này có thể chưa đăng, hoặc không lưu văn bản địa phương và văn bản rất cũ.", nums[0])
 	}
 	if err != nil {
-		return bad("portal_error", "Không tra được trên cổng Chính phủ: "+err.Error())
+		return bad("portal_error", "Không tra được trên cổng Chính phủ: {0}", err.Error())
 	}
 	return ok(w, d)
 }
@@ -703,7 +713,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 	if err := body(r, &in); err != nil {
 		return err
 	}
-	aiChanged := false
+	aiChanged, langChanged := false, false
 	for k, v := range in {
 		v = strings.TrimSpace(v)
 		in[k] = v
@@ -716,7 +726,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 			}
 			in[k], aiChanged = enc, true
 		case hiddenSettings[k]:
-			return bad("bad_setting", "Không thể đặt giá trị này: "+k)
+			return bad("bad_setting", "Không thể đặt giá trị này: {0}", k)
 		case k == "active_start" || k == "active_end" || k == "quiet_start" || k == "quiet_end":
 			if !reClock.MatchString(v) {
 				return bad("bad_setting", "Giờ phải có dạng HH:MM (ví dụ 07:00).")
@@ -739,20 +749,25 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 				}
 			}
 			aiChanged = true
+		case k == "language":
+			if v != i18n.Vi && v != i18n.En {
+				return bad("bad_setting", "Ngôn ngữ không được hỗ trợ: {0}", v)
+			}
+			langChanged = true
 		case k == "ai_cli_path" || k == "ai_model":
 			aiChanged = true
 		case flags[k]:
 			if v != "0" && v != "1" {
-				return bad("bad_setting", "Giá trị bật/tắt không hợp lệ: "+k)
+				return bad("bad_setting", "Giá trị bật/tắt không hợp lệ: {0}", k)
 			}
 		default:
 			rng, known := intRanges[k]
 			if !known {
-				return bad("bad_setting", "Không có cài đặt này: "+k)
+				return bad("bad_setting", "Không có cài đặt này: {0}", k)
 			}
 			n, err := strconv.Atoi(v)
 			if err != nil || n < rng[0] || n > rng[1] {
-				return bad("bad_setting", fmt.Sprintf("%s phải là số từ %d đến %d.", k, rng[0], rng[1]))
+				return bad("bad_setting", "{0} phải là số từ {1} đến {2}.", k, rng[0], rng[1])
 			}
 			if k == "ai_timeout_seconds" {
 				aiChanged = true
@@ -761,7 +776,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 	}
 	if v, has := in["autostart"]; has && s.SetAutostart != nil {
 		if err := s.SetAutostart(v == "1"); err != nil {
-			return bad("autostart", "Không đặt được chế độ khởi động cùng Windows: "+err.Error())
+			return bad("autostart", "Không đặt được chế độ khởi động cùng Windows: {0}", err.Error())
 		}
 	}
 	if err := s.St.SetSettings(in); err != nil {
@@ -775,6 +790,10 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 	if v, has := in["interval_official"]; has {
 		n, _ := strconv.Atoi(v)
 		s.St.SetIntervalByKind("official", n)
+	}
+	if langChanged {
+		i18n.SetLang(in["language"])
+		aiChanged = true // the provider's status text is worded in the language
 	}
 	if aiChanged {
 		if s.ReloadAI != nil {
@@ -815,7 +834,7 @@ func (s *Server) testProvider(w http.ResponseWriter, r *http.Request) error {
 		return ok(w, map[string]any{"ok": false, "provider": provider.Name(), "message": err.Error()})
 	}
 	return ok(w, map[string]any{"ok": true, "provider": provider.Name(),
-		"message": fmt.Sprintf("Kết nối tốt, phản hồi sau %.1f giây.", time.Since(started).Seconds())})
+		"message": i18n.T("Kết nối tốt, phản hồi sau {0} giây.", fmt.Sprintf("%.1f", time.Since(started).Seconds()))})
 }
 
 func (s *Server) backup(w http.ResponseWriter, r *http.Request) error {
@@ -823,7 +842,7 @@ func (s *Server) backup(w http.ResponseWriter, r *http.Request) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	dest := filepath.Join(dir, "q3vnlaw-"+time.Now().Format("20060102-150405")+".db")
+	dest := filepath.Join(dir, "q3vigilai-"+time.Now().Format("20060102-150405")+".db")
 	if err := s.St.Backup(dest); err != nil {
 		return err
 	}

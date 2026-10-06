@@ -1,6 +1,6 @@
-import { h, clear, fill, api, run, toast, labels, ext, empty } from '../lib.js';
+import { h, clear, fill, api, run, toast, labels, ext, empty, t, N } from '../lib.js';
 
-export const title = 'Chat';
+export const title = N('Chat');
 
 let current = 0;
 
@@ -11,20 +11,20 @@ export async function render(ctx) {
     h('button', { class: 'primary', onclick: run(async () => {
       const s = await api('POST', '/chat/sessions', { scope: { kind: 'all' } });
       location.hash = '#/chat/' + s.id;
-    }) }, '+ Cuộc trò chuyện mới'),
-    sessions.map((s) => h('a', { href: '#/chat/' + s.id, class: s.id === current ? 'on' : '', title: s.title }, s.title || 'Chưa đặt tên')));
+    }) }, t('+ Cuộc trò chuyện mới')),
+    sessions.map((s) => h('a', { href: '#/chat/' + s.id, class: s.id === current ? 'on' : '', title: s.title }, s.title || t('Chưa đặt tên'))));
   const main = h('div', { class: 'chat-main' });
   fill(ctx.view, h('div', { class: 'chat' }, list, main));
   if (!current) {
-    main.append(empty('Hỏi đáp trên dữ liệu đã thu thập',
-      'Q3VNLaw chỉ trả lời từ các văn bản và bài báo nó đã tải về, và luôn kèm đoạn trích làm căn cứ. Bấm "Cuộc trò chuyện mới" để bắt đầu, hoặc bấm "Hỏi AI về tin này" trên một cảnh báo.'));
+    main.append(empty(t('Hỏi đáp trên dữ liệu đã thu thập'),
+      t('Q3VigilAI chỉ trả lời từ các văn bản và bài báo nó đã tải về, và luôn kèm đoạn trích làm căn cứ. Bấm "Cuộc trò chuyện mới" để bắt đầu, hoặc bấm "Hỏi AI về tin này" trên một cảnh báo.')));
     return;
   }
   const data = await api('GET', '/chat/sessions/' + current);
   const scope = JSON.parse(data.session.scope || '{}');
   const msgs = h('div', { class: 'msgs' });
-  const input = h('textarea', { rows: 2, placeholder: 'Nhập câu hỏi… (Enter để gửi, Shift+Enter để xuống dòng)' });
-  const sendBtn = h('button', { class: 'primary' }, 'Gửi');
+  const input = h('textarea', { rows: 2, placeholder: t('Nhập câu hỏi… (Enter để gửi, Shift+Enter để xuống dòng)') });
+  const sendBtn = h('button', { class: 'primary' }, t('Gửi'));
   const send = run(async () => {
     const text = input.value.trim();
     if (!text || sendBtn.disabled) return;
@@ -49,20 +49,20 @@ export async function render(ctx) {
   sendBtn.addEventListener('click', send);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   if (data.messages.length === 0) {
-    msgs.append(h('div', { class: 'hint' }, scope.kind === 'alert' ? 'Phạm vi: chỉ các nguồn của cảnh báo đã chọn.'
-      : scope.kind === 'document' ? 'Phạm vi: chỉ văn bản đã chọn.' : 'Phạm vi: toàn bộ văn bản và bài báo đã thu thập.'));
+    msgs.append(h('div', { class: 'hint' }, scope.kind === 'alert' ? t('Phạm vi: chỉ các nguồn của cảnh báo đã chọn.')
+      : scope.kind === 'document' ? t('Phạm vi: chỉ văn bản đã chọn.') : t('Phạm vi: toàn bộ văn bản và bài báo đã thu thập.')));
   }
   msgs.append(...data.messages.map(message));
   main.append(
-    h('div', { class: 'toolbar', }, h('span', { class: 'grow' }),
+    h('div', { class: 'toolbar' }, h('span', { class: 'grow' }),
       h('button', { class: 'link danger', onclick: run(async () => {
-        if (!confirm('Xóa cuộc trò chuyện này?')) return;
+        if (!confirm(t('Xóa cuộc trò chuyện này?'))) return;
         await api('DELETE', '/chat/sessions/' + current);
         location.hash = '#/chat';
-      }) }, 'Xóa cuộc trò chuyện')),
+      }) }, t('Xóa cuộc trò chuyện'))),
     msgs,
     h('div', { class: 'composer' }, input, sendBtn),
-    h('div', { class: 'disclaimer' }, 'Câu trả lời chỉ mang tính tham khảo, không thay thế tư vấn pháp lý. Luôn đối chiếu với văn bản gốc trước khi áp dụng.'));
+    h('div', { class: 'disclaimer' }, t('Câu trả lời chỉ mang tính tham khảo, không thay thế tư vấn pháp lý. Luôn đối chiếu với văn bản gốc trước khi áp dụng.')));
   msgs.scrollTop = msgs.scrollHeight;
   input.focus();
 }
@@ -73,11 +73,11 @@ function message(m) {
   return h('div', { class: 'msg assistant' },
     h('div', { class: 'text' }, m.content),
     cites.length ? h('div', { class: 'cites' },
-      h('div', { class: 'hint' }, 'Căn cứ' + (m.provider ? '' : ' (kết quả tìm kiếm)') + ':'),
+      h('div', { class: 'hint' }, t('Căn cứ') + (m.provider ? '' : ' ' + t('(kết quả tìm kiếm)')) + ':'),
       cites.map((c) => h('details', { class: 'cite' + (c.used ? '' : ' unused') },
-        h('summary', null, `[${c.n}] ${c.label || 'Không rõ'}${c.path ? ' — ' + c.path : ''} · ${c.source || ''}${c.tier ? ' (' + labels.tier[c.tier] + ')' : ''}${c.used ? '' : ' · không được dùng trong câu trả lời'}`),
+        h('summary', null, `[${c.n}] ${c.label || t('Không rõ')}${c.path ? ' — ' + c.path : ''} · ${c.source ? t(c.source) : ''}${c.tier ? ' (' + labels.tier[c.tier] + ')' : ''}${c.used ? '' : ' · ' + t('không được dùng trong câu trả lời')}`),
         h('div', { class: 'quote' }, c.quote),
-        c.url ? h('div', null, ext(c.url, 'Mở nguồn ↗')) : null))) : null);
+        c.url ? h('div', null, ext(c.url, t('Mở nguồn ↗'))) : null))) : null);
 }
 
 // stream posts a question and reads the answer as server-sent events.
@@ -86,7 +86,7 @@ async function stream(sessionId, content, onDelta, onDone) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ content }),
   });
   if (!resp.ok) {
-    let msg = 'Lỗi ' + resp.status;
+    let msg = t('Lỗi {0}', resp.status);
     try { msg = (await resp.json()).error.message; } catch (e) { /* keep default */ }
     throw new Error(msg);
   }

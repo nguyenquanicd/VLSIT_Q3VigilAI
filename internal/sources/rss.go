@@ -18,9 +18,10 @@ import (
 	"golang.org/x/net/html/atom"
 	"golang.org/x/net/html/charset"
 
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 type rssConfig struct {
@@ -103,7 +104,7 @@ func ParseFeed(data []byte, base string) ([]Ref, error) {
 	dec.CharsetReader = func(label string, in io.Reader) (io.Reader, error) { return charset.NewReaderLabel(label, in) }
 	var doc feedDoc
 	if err := dec.Decode(&doc); err != nil {
-		return nil, fmt.Errorf("không đọc được RSS: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("không đọc được RSS"), err)
 	}
 	baseURL, _ := url.Parse(base)
 	resolve := func(link string) string {
@@ -181,7 +182,7 @@ func makeRef(link, title, summary, date string) (Ref, bool) {
 func listRSS(ctx context.Context, fc *fetch.Client, src store.Source) (Listing, error) {
 	var cfg rssConfig
 	if err := json.Unmarshal([]byte(src.Config), &cfg); err != nil || len(cfg.all()) == 0 {
-		return Listing{}, errors.New("nguồn RSS chưa có địa chỉ feed")
+		return Listing{}, errors.New(i18n.T("nguồn RSS chưa có địa chỉ feed"))
 	}
 	state := loadState(src.ETag)
 	next := condState{}
@@ -300,13 +301,13 @@ func ParseLinkList(page []byte, base string, pattern *regexp.Regexp) []Ref {
 func listHTML(ctx context.Context, fc *fetch.Client, src store.Source) (Listing, error) {
 	var cfg htmlListConfig
 	if err := json.Unmarshal([]byte(src.Config), &cfg); err != nil || cfg.URL == "" {
-		return Listing{}, errors.New("nguồn trang danh mục chưa có địa chỉ")
+		return Listing{}, errors.New(i18n.T("nguồn trang danh mục chưa có địa chỉ"))
 	}
 	var pattern *regexp.Regexp
 	if cfg.LinkPattern != "" {
 		p, err := regexp.Compile(cfg.LinkPattern)
 		if err != nil {
-			return Listing{}, fmt.Errorf("mẫu đường dẫn không hợp lệ: %w", err)
+			return Listing{}, fmt.Errorf("%s: %w", i18n.T("mẫu đường dẫn không hợp lệ"), err)
 		}
 		pattern = p
 	}

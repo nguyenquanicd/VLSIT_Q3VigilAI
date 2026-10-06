@@ -6,6 +6,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"q3vigilai/internal/i18n"
 )
 
 // Protect encrypts a secret with Windows DPAPI for the current user. The
@@ -32,12 +34,12 @@ func Unprotect(stored string) (string, error) {
 	}
 	data, err := base64.StdEncoding.DecodeString(stored)
 	if err != nil || len(data) == 0 {
-		return "", errors.New("khóa API lưu trữ bị hỏng")
+		return "", errors.New(i18n.T("khóa API lưu trữ bị hỏng"))
 	}
 	in := windows.DataBlob{Size: uint32(len(data)), Data: &data[0]}
 	var out windows.DataBlob
 	if err := windows.CryptUnprotectData(&in, nil, nil, 0, nil, windows.CRYPTPROTECT_UI_FORBIDDEN, &out); err != nil {
-		return "", errors.New("không giải mã được khóa API (có thể thư mục dữ liệu được chép từ máy hoặc tài khoản khác); hãy nhập lại khóa")
+		return "", errors.New(i18n.T("không giải mã được khóa API (có thể thư mục dữ liệu được chép từ máy hoặc tài khoản khác); hãy nhập lại khóa"))
 	}
 	defer windows.LocalFree(windows.Handle(unsafe.Pointer(out.Data)))
 	return string(unsafe.Slice(out.Data, out.Size)), nil

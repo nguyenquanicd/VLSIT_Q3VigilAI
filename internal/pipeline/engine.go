@@ -10,16 +10,17 @@ import (
 	"sync"
 	"time"
 
-	"q3vnlaw/internal/ai"
-	"q3vnlaw/internal/extract"
-	"q3vnlaw/internal/fetch"
-	"q3vnlaw/internal/sources"
-	"q3vnlaw/internal/store"
-	"q3vnlaw/internal/textutil"
+	"q3vigilai/internal/ai"
+	"q3vigilai/internal/extract"
+	"q3vigilai/internal/fetch"
+	"q3vigilai/internal/i18n"
+	"q3vigilai/internal/sources"
+	"q3vigilai/internal/store"
+	"q3vigilai/internal/textutil"
 )
 
 // ErrBusy is returned when a scan is requested while one is running.
-var ErrBusy = errors.New("đang có một lượt quét chạy")
+var ErrBusy = i18n.Err("đang có một lượt quét chạy")
 
 // clusterWindow is how long reports of the same event keep merging into one alert.
 const clusterWindow = 14 * 24 * time.Hour
@@ -193,7 +194,9 @@ func (e *Engine) Scan(ctx context.Context, trigger string, only []int64) (store.
 	}
 	results := make([]listed, len(todo))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 4)
+	// Two at a time: each parsed feed is a few megabytes, and a scan that takes
+	// a few seconds longer is no loss for a program that runs once an hour.
+	sem := make(chan struct{}, 2)
 	var done int
 	var dmu sync.Mutex
 	for i := range todo {
@@ -220,7 +223,7 @@ func (e *Engine) Scan(ctx context.Context, trigger string, only []int64) (store.
 		}
 	}
 	if len(todo) > 0 && offline == len(todo) {
-		sc.Note = "Không có kết nối mạng, bỏ lượt quét này"
+		sc.Note = i18n.T("Không có kết nối mạng, bỏ lượt quét này")
 		return sc, nil
 	}
 
@@ -275,7 +278,7 @@ func (e *Engine) Scan(ctx context.Context, trigger string, only []int64) (store.
 
 	// 2. Match without AI, then judge the matches.
 	if len(topics) == 0 {
-		sc.Note = "Chưa có chủ đề theo dõi nào đang bật"
+		sc.Note = i18n.T("Chưa có chủ đề theo dõi nào đang bật")
 	}
 	st := &scanState{sc: &sc, provider: e.provider(), aiBudget: e.St.SettingInt("ai_max_calls")}
 	for n, fi := range items {
@@ -307,7 +310,7 @@ func (e *Engine) Scan(ctx context.Context, trigger string, only []int64) (store.
 		e.St.SetSettings(map[string]string{"last_daily_at": store.FormatTime(now)})
 	}
 	if st.provider == nil && e.AIError() != "" {
-		sc.Note = strings.TrimSpace(sc.Note + " AI không dùng được: " + e.AIError())
+		sc.Note = strings.TrimSpace(sc.Note + " " + i18n.T("AI không dùng được: {0}", e.AIError()))
 	}
 	return sc, nil
 }
@@ -383,7 +386,7 @@ func (e *Engine) raise(ctx context.Context, st *scanState, fi *fresh, t store.To
 		if a.Summary == "" {
 			a.Summary = textutil.Truncate(fi.text, 400)
 		}
-		a.Reason = "Khớp từ khóa: " + strings.Join(a.MatchedKeywords, ", ") + ". Chưa được AI đánh giá; trạng thái pháp lý là phỏng đoán theo câu chữ."
+		a.Reason = i18n.T("Khớp từ khóa: {0}. Chưa được AI đánh giá; trạng thái pháp lý là phỏng đoán theo câu chữ.", strings.Join(a.MatchedKeywords, ", "))
 	}
 
 	if official {
@@ -421,7 +424,7 @@ func (e *Engine) raise(ctx context.Context, st *scanState, fi *fresh, t store.To
 	}
 	if (a.LegalStatus == "draft" || a.LegalStatus == "proposal") && !slices.Contains(t.Kinds, "draft") && a.State == "unread" {
 		a.State, a.NeedsNotify = "filtered", false
-		a.Reason = strings.TrimSpace(a.Reason + " Chủ đề này không theo dõi dự thảo, đề xuất.")
+		a.Reason = strings.TrimSpace(a.Reason + " " + i18n.T("Chủ đề này không theo dõi dự thảo, đề xuất."))
 	}
 	a.DocNumbers = primary
 	a.Severity = Severity(fi.src.Kind, m, a.LegalStatus, a.Relevance, verdict != nil)

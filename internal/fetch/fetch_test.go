@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -100,7 +101,7 @@ func TestRobotsConditionalAndLimits(t *testing.T) {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
-			if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "Q3VNLaw/") {
+			if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "Q3VigilAI/") {
 				t.Errorf("user agent: %q", got)
 			}
 			w.Header().Set("ETag", `"v1"`)
@@ -168,7 +169,7 @@ func TestRobotsParsing(t *testing.T) {
 	if !r.allows("/tin-tuc") || r.allows("/admin/x") {
 		t.Error("star group not applied")
 	}
-	mine := parseRobots("User-agent: *\nDisallow: /\n\nUser-agent: Q3VNLaw\nDisallow: /x\n")
+	mine := parseRobots("User-agent: *\nDisallow: /\n\nUser-agent: Q3VigilAI\nDisallow: /x\n")
 	if !mine.allows("/tin") || mine.allows("/x/1") {
 		t.Error("own group should take precedence over *")
 	}
@@ -191,5 +192,59 @@ func TestOfflineDetection(t *testing.T) {
 	}
 	if IsOffline(errors.New("HTTP 500")) || IsOffline(nil) {
 		t.Error("false positive")
+	}
+}
+
+type countSink struct {
+	n       int64
+	closed  bool
+	aborted bool
+}
+
+func (s *countSink) Write(p []byte) (int, error) { s.n += int64(len(p)); return len(p), nil }
+func (s *countSink) Close() error                { s.closed = true; return nil }
+func (s *countSink) Abort()                      { s.aborted = true }
+
+func TestSinkStreamsTheBodyInsteadOfBufferingIt(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/big":
+			w.Write([]byte(strings.Repeat("x", 3<<20)))
+		case "/flaky":
+			if calls.Add(1) == 1 {
+				http.Error(w, "busy", http.StatusBadGateway)
+				return
+			}
+			w.Write([]byte("ok"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := testClient("127.0.0.1")
+	ctx := context.Background()
+
+	var sinks []*countSink
+	open := func() (io.WriteCloser, error) { s := &countSink{}; sinks = append(sinks, s); return s, nil }
+	resp, err := c.Get(ctx, srv.URL+"/big", Options{MaxBytes: 10 << 20, Sink: open})
+	if err != nil || len(resp.Body) != 0 || resp.Size != 3<<20 || !sinks[0].closed || sinks[0].n != 3<<20 {
+		t.Fatalf("streamed download: %v size=%d body=%d sink=%+v", err, resp.Size, len(resp.Body), sinks[0])
+	}
+
+	// Over the cap: the sink is told to throw its partial file away.
+	sinks = nil
+	if _, err := c.Get(ctx, srv.URL+"/big", Options{MaxBytes: 1 << 20, Sink: open}); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("size cap with a sink: %v", err)
+	}
+	if len(sinks) != 1 || !sinks[0].aborted || sinks[0].closed {
+		t.Errorf("oversized download not aborted: %+v", sinks)
+	}
+
+	// A retry after a server error starts a fresh sink; the failed attempt
+	// never reached the sink at all.
+	sinks = nil
+	if resp, err := c.Get(ctx, srv.URL+"/flaky", Options{Sink: open}); err != nil || resp.Size != 2 || len(sinks) != 1 {
+		t.Errorf("retry with a sink: %v %+v sinks=%d", err, resp, len(sinks))
 	}
 }
