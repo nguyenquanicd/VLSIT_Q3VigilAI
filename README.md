@@ -668,3 +668,7 @@ Chi tiết thiết kế: [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
   số thông báo lỗi kỹ thuật trả về từ thư viện bên dưới hoặc từ AI có thể vẫn nguyên văn gốc.
 - **Chỉ Windows 10/11.** File chưa ký số nên SmartScreen có thể cảnh báo ở lần chạy đầu.
 - **Thông báo nổi phụ thuộc Windows**: xem [mục 3](#3-thông-báo) về chế độ Không làm phiền.
+
+## 13. Tác giả / Author
+Hoàng Quang
+Ngọc Hân
