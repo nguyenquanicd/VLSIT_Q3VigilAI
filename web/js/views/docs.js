@@ -22,7 +22,16 @@ export async function render(ctx) {
     fetchBtn.disabled = true;
     fetchBtn.textContent = t('Đang tra và tải…');
     try {
-      const d = await api('POST', '/documents/fetch', { number: number.value });
+      let d = await api('POST', '/documents/fetch', { number: number.value });
+      if (d.confirmation_required) {
+        const estimate = d.estimate;
+        const knownMB = (estimate.total_bytes / 1_000_000).toFixed(1);
+        const message = estimate.unknown_files
+          ? t('Không xác định được dung lượng của {0} tệp đính kèm (đã biết khoảng {1} MB). Có thể vượt 50 MB; bạn có muốn tiếp tục tải?', estimate.unknown_files, knownMB)
+          : t('Tổng dung lượng tệp đính kèm khoảng {0} MB, vượt quá 50 MB. Bạn có muốn tiếp tục tải?', knownMB);
+        if (!window.confirm(message)) return;
+        d = await api('POST', '/documents/fetch', { number: number.value, confirm_large: true });
+      }
       toast(t('Đã tải {0}', d.doc_number));
       location.hash = '#/docs/' + d.id;
     } finally {
@@ -78,8 +87,9 @@ async function detail(ctx, id) {
         row(t('Tải về lúc'), fmtTime(d.fetched_at))))),
     h('div', { class: 'panel' },
       h('h2', null, t('Tệp gốc')),
-      d.files.length === 0 ? h('p', { class: 'hint' }, t('Cổng không có tệp đính kèm, hoặc tệp chưa tải được.'))
-        : d.files.map((f, i) => h('div', null, ext(`/api/documents/${d.id}/file/${i}`, f.split('/').pop()))),
+      d.files.length === 0 ? h('p', { class: 'hint' }, t('Chưa có tệp đã tải. Cổng có thể không có tệp đính kèm, hoặc lượt tải nền đã bỏ qua vì cần xác nhận dung lượng. Nhập số hiệu trong thư viện để tải chủ động.'))
+        : [h('p', { class: 'hint' }, t('Đường dẫn dưới đây tương đối với thư mục dữ liệu.')),
+          d.files.map((f, i) => h('div', null, ext(`/api/documents/${d.id}/file/${i}`, f.replaceAll('/', '\\'))))],
       d.files.length && !d.has_text ? h('p', { class: 'hint mt' },
         t('Tệp là bản scan, không có lớp chữ nên chưa tìm kiếm hay hỏi đáp được theo nội dung. Có thể chuyển sang chữ bằng công cụ OCR (skill han-scan-to-word).')) : null),
     h('div', { class: 'panel' },

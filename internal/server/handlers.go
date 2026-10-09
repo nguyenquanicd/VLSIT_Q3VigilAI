@@ -475,7 +475,8 @@ func (s *Server) getDocument(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) fetchDocument(w http.ResponseWriter, r *http.Request) error {
 	var in struct {
-		Number string `json:"number"`
+		Number       string `json:"number"`
+		ConfirmLarge bool   `json:"confirm_large"`
 	}
 	if err := body(r, &in); err != nil {
 		return err
@@ -486,12 +487,15 @@ func (s *Server) fetchDocument(w http.ResponseWriter, r *http.Request) error {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
-	d, err := s.Engine.FetchByNumber(ctx, nums[0])
+	d, estimate, confirmationRequired, err := s.Engine.FetchByNumber(ctx, nums[0], in.ConfirmLarge)
 	if err == store.ErrNotFound {
 		return apiErr(http.StatusNotFound, "not_on_portal", "Không tìm thấy văn bản số {0} trên Cổng Thông tin điện tử Chính phủ. Cổng này có thể chưa đăng, hoặc không lưu văn bản địa phương và văn bản rất cũ.", nums[0])
 	}
 	if err != nil {
 		return bad("portal_error", "Không tra được trên cổng Chính phủ: {0}", err.Error())
+	}
+	if confirmationRequired {
+		return ok(w, map[string]any{"confirmation_required": true, "estimate": estimate})
 	}
 	return ok(w, d)
 }

@@ -526,6 +526,18 @@ func (e *Engine) SaveOfficial(ctx context.Context, portalID string, sourceID int
 	if err != nil {
 		return store.Document{}, "", err
 	}
+	dirName := sources.SafeName(strings.ReplaceAll(info.DocNumber, "/", "_"))
+	dir := filepath.Join(e.DataDir, "docs", dirName)
+	estimate, estimateErr := sources.EstimateDownload(ctx, e.Fetch, info.FileURLs, dir)
+	if estimateErr != nil {
+		// Background confirmation cannot interrupt a scan. Keep the document
+		// metadata, but leave the attachments for a user-initiated download.
+		estimate.UnknownFiles = len(info.FileURLs)
+	}
+	return e.saveOfficialInfo(ctx, info, sourceID, false, estimate)
+}
+
+func (e *Engine) saveOfficialInfo(ctx context.Context, info *sources.DocInfo, sourceID int64, confirmLarge bool, estimate sources.DownloadEstimate) (store.Document, string, error) {
 	if sourceID == 0 {
 		sourceID = e.officialSourceID()
 	}
@@ -555,7 +567,10 @@ func (e *Engine) SaveOfficial(ctx context.Context, portalID string, sourceID int
 
 	dirName := sources.SafeName(strings.ReplaceAll(info.DocNumber, "/", "_"))
 	dir := filepath.Join(e.DataDir, "docs", dirName)
-	saved, _ := sources.DownloadFiles(ctx, e.Fetch, info.FileURLs, dir)
+	var saved []string
+	if confirmLarge || !estimate.RequiresConfirmation() {
+		saved, _ = sources.DownloadFiles(ctx, e.Fetch, info.FileURLs, dir)
+	}
 	var files []string
 	var text strings.Builder
 	for _, name := range saved {
@@ -604,16 +619,29 @@ func (e *Engine) SaveOfficial(ctx context.Context, portalID string, sourceID int
 
 // FetchByNumber finds a document on the Government portal by its number and
 // stores it. It returns store.ErrNotFound when the portal does not have it.
-func (e *Engine) FetchByNumber(ctx context.Context, number string) (store.Document, error) {
+func (e *Engine) FetchByNumber(ctx context.Context, number string, confirmLarge bool) (store.Document, sources.DownloadEstimate, bool, error) {
 	all, _ := e.St.Sources()
 	e.Fetch.SetAllowed(sources.AllowedDomains(all))
 	hit, err := sources.ResolveVanban(ctx, e.Fetch, number)
 	if err != nil {
-		return store.Document{}, err
+		return store.Document{}, sources.DownloadEstimate{}, false, err
 	}
 	if hit == nil {
-		return store.Document{}, store.ErrNotFound
+		return store.Document{}, sources.DownloadEstimate{}, false, store.ErrNotFound
 	}
-	d, _, err := e.SaveOfficial(ctx, hit.PortalID, 0)
-	return d, err
+	info, err := sources.VanbanInfo(ctx, e.Fetch, hit.PortalID)
+	if err != nil {
+		return store.Document{}, sources.DownloadEstimate{}, false, err
+	}
+	dirName := sources.SafeName(strings.ReplaceAll(info.DocNumber, "/", "_"))
+	dir := filepath.Join(e.DataDir, "docs", dirName)
+	estimate, err := sources.EstimateDownload(ctx, e.Fetch, info.FileURLs, dir)
+	if err != nil {
+		return store.Document{}, estimate, false, err
+	}
+	if estimate.RequiresConfirmation() && !confirmLarge {
+		return store.Document{}, estimate, true, nil
+	}
+	d, _, err := e.saveOfficialInfo(ctx, info, 0, confirmLarge, estimate)
+	return d, estimate, false, err
 }

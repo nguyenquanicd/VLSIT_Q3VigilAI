@@ -294,14 +294,17 @@ cảnh báo được xác nhận, hoặc khi bạn tải theo số hiệu.
   lực, không ghi văn bản còn hay hết hiệu lực. Hãy đối chiếu tại vbpl.vn trước khi trích dẫn.
 - Cột **Tệp**: *(có chữ)* là PDF có lớp chữ, tìm kiếm và hỏi đáp được; *(bản scan)* là ảnh
   chụp, chưa tìm kiếm được.
+- Trước khi tải, ứng dụng ước tính tổng dung lượng các tệp đính kèm. Nếu tổng vượt 50 MB
+  hoặc máy chủ không công bố đủ dung lượng để ước tính, ứng dụng hỏi xác nhận trước. Các
+  lượt tải nền bỏ qua bộ tệp cần xác nhận; nhập số hiệu tại đây để chủ động tải.
 
 Bấm một dòng để xem chi tiết:
 
 ![Chi tiết văn bản](docs/images/doc-detail.png)
 
 - **Hỏi AI về văn bản này**: mở Chat giới hạn trong văn bản đó.
-- **Mở thư mục chứa tệp**: mở thư mục trong Explorer. Bấm tên file để xem PDF gốc trong
-  trình duyệt.
+- **Mở thư mục chứa tệp**: mở thư mục trong Explorer. Danh sách tệp hiển thị đường dẫn tương
+  đối trong thư mục dữ liệu; bấm đường dẫn để mở trực tiếp PDF đã tải trong trình duyệt.
 - **Quan hệ với văn bản khác**: văn bản nào sửa đổi, thay thế, hướng dẫn văn bản này, suy ra
   từ câu chữ trích yếu và chỉ gồm các văn bản đã có trong thư viện, nên có thể chưa đầy đủ.
 
@@ -528,7 +531,7 @@ Q3VigilAI; đóng đi là xong.
 ```
 data\
 ├── q3vigilai.db        cảnh báo, chủ đề, nguồn, văn bản, chat (SQLite)
-├── docs\<số hiệu>\    PDF gốc tải từ Cổng Chính phủ
+├── docs\<số hiệu đã chuẩn hóa>\    PDF gốc tải từ Cổng Chính phủ
 ├── logs\             nhật ký, giữ 14 ngày
 ├── backups\          bản sao lưu, và bản sao tự động trước khi nâng cấp phiên bản
 └── runtime.json      cổng và mã phiên của cửa sổ đang chạy (xóa khi thoát)
@@ -536,7 +539,12 @@ data\
 
 - Nếu thư mục cạnh file chạy không ghi được (ví dụ cài trong `Program Files`), ứng dụng tự dùng
   `%LOCALAPPDATA%\Q3VigilAI` và báo cho bạn.
+- Mặc định, thư mục dữ liệu là `data\` cạnh file chạy.
 - Chạy với `--data <thư mục>` để chọn nơi lưu dữ liệu khác.
+- Đường dẫn đầy đủ của PDF là `<thư mục dữ liệu>\docs\<số hiệu đã chuẩn hóa>\<tên tệp trên Cổng>`.
+  Ví dụ, nếu dữ liệu ở `C:\Q3VigilAI\data` và số hiệu là `59/2020/QH14`, thư mục tệp là
+  `C:\Q3VigilAI\data\docs\59_2020_QH14`. Mở chi tiết văn bản để bấm PDF hoặc dùng **Mở thư
+  mục chứa tệp**.
 - **Nâng từ Q3VNLaw:** chép `q3vigilai.exe` vào đúng thư mục có `data\` cũ (hoặc chạy với
   `--data` trỏ vào đó). Lần đầu chạy, ứng dụng đổi `q3vnlaw.db` thành `q3vigilai.db` cùng
   các file đi kèm, giữ nguyên chủ đề, cảnh báo, văn bản và cài đặt; nếu đang bật *Khởi động

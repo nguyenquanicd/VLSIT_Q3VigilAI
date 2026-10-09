@@ -208,18 +208,29 @@ type Options struct {
 
 // Response is a completed fetch.
 type Response struct {
-	Status       int
-	Body         []byte // empty when the request had a Sink
-	Size         int64  // bytes delivered to the Sink
-	ETag         string
-	LastModified string
-	NotModified  bool
-	URL          string // after redirects
-	ContentType  string
+	Status        int
+	Body          []byte // empty when the request had a Sink
+	Size          int64  // bytes delivered to the Sink
+	ContentLength int64  // declared response size, or -1 when unavailable
+	ETag          string
+	LastModified  string
+	NotModified   bool
+	URL           string // after redirects
+	ContentType   string
 }
 
 // Get fetches a URL from a whitelisted host.
 func (c *Client) Get(ctx context.Context, rawURL string, opt Options) (*Response, error) {
+	return c.request(ctx, rawURL, opt, http.MethodGet)
+}
+
+// Head requests only the response headers. It is used to estimate attachment
+// sizes before the application starts downloading them.
+func (c *Client) Head(ctx context.Context, rawURL string) (*Response, error) {
+	return c.request(ctx, rawURL, Options{}, http.MethodHead)
+}
+
+func (c *Client) request(ctx context.Context, rawURL string, opt Options, method string) (*Response, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -246,7 +257,7 @@ func (c *Client) Get(ctx context.Context, rawURL string, opt Options) (*Response
 			case <-time.After(c.RetryDelay * time.Duration(attempt)):
 			}
 		}
-		resp, retry, err := c.once(ctx, u, hs, opt)
+		resp, retry, err := c.once(ctx, u, hs, opt, method)
 		if err == nil {
 			return resp, nil
 		}
@@ -259,7 +270,7 @@ func (c *Client) Get(ctx context.Context, rawURL string, opt Options) (*Response
 }
 
 // once performs a single attempt; retry reports whether trying again may help.
-func (c *Client) once(ctx context.Context, u *url.URL, hs *hostState, opt Options) (resp *Response, retry bool, err error) {
+func (c *Client) once(ctx context.Context, u *url.URL, hs *hostState, opt Options, method string) (resp *Response, retry bool, err error) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	if !c.Insecure {
@@ -273,7 +284,7 @@ func (c *Client) once(ctx context.Context, u *url.URL, hs *hostState, opt Option
 	}
 	defer func() { hs.last = time.Now() }()
 
-	method, body := http.MethodGet, io.Reader(nil)
+	body := io.Reader(nil)
 	if opt.UsePost {
 		method, body = http.MethodPost, strings.NewReader(opt.Form.Encode())
 	}
@@ -299,8 +310,12 @@ func (c *Client) once(ctx context.Context, u *url.URL, hs *hostState, opt Option
 	}
 	defer r.Body.Close()
 	out := &Response{Status: r.StatusCode, ETag: r.Header.Get("ETag"), LastModified: r.Header.Get("Last-Modified"),
-		URL: r.Request.URL.String(), ContentType: r.Header.Get("Content-Type")}
+		URL: r.Request.URL.String(), ContentType: r.Header.Get("Content-Type"), ContentLength: r.ContentLength}
 	switch {
+	case method == http.MethodHead && (r.StatusCode == http.StatusMethodNotAllowed || r.StatusCode == http.StatusNotImplemented):
+		// Some portals do not implement HEAD. The caller can treat this as an
+		// unknown size and ask before downloading.
+		return out, false, nil
 	case r.StatusCode == http.StatusNotModified:
 		out.NotModified = true
 		return out, false, nil
@@ -308,6 +323,9 @@ func (c *Client) once(ctx context.Context, u *url.URL, hs *hostState, opt Option
 		return nil, true, errors.New(i18n.T("HTTP {0} từ {1}", r.StatusCode, u.Hostname()))
 	case r.StatusCode >= 400:
 		return nil, false, errors.New(i18n.T("HTTP {0} từ {1}", r.StatusCode, u.Hostname()))
+	}
+	if method == http.MethodHead {
+		return out, false, nil
 	}
 	if opt.Sink != nil {
 		w, err := opt.Sink()
@@ -472,7 +490,7 @@ func (c *Client) robotsFor(ctx context.Context, u *url.URL, hs *hostState) *robo
 	ru.Path, ru.RawPath, ru.RawQuery, ru.Fragment = "/robots.txt", "", "", ""
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if resp, _, err := c.once(cctx, &ru, hs, Options{MaxBytes: 512 << 10, SkipRobots: true}); err == nil && resp.Status == 200 &&
+	if resp, _, err := c.once(cctx, &ru, hs, Options{MaxBytes: 512 << 10, SkipRobots: true}, http.MethodGet); err == nil && resp.Status == 200 &&
 		!strings.Contains(strings.ToLower(resp.ContentType), "html") {
 		r = parseRobots(string(resp.Body))
 	}

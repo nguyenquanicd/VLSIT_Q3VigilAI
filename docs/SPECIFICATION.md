@@ -279,9 +279,13 @@ mục tin sẽ khớp, để người dùng chỉnh từ khóa trước khi lưu
 
 - Thư viện văn bản chính thức đã tải: số hiệu, tên, loại, cơ quan ban hành, ngày ban
   hành, ngày hiệu lực, tình trạng (kèm nhãn "suy luận" khi không có dữ liệu chính thức).
-- Trang chi tiết: metadata, file gốc (mở bằng trình xem PDF của hệ thống), bản chữ,
-  cây quan hệ (sửa đổi / hướng dẫn / thay thế / hợp nhất), các cảnh báo liên quan.
+- Trang chi tiết: metadata, link mở trực tiếp PDF gốc đã tải, đường dẫn tương đối trong
+  thư mục dữ liệu, bản chữ, cây quan hệ (sửa đổi / hướng dẫn / thay thế / hợp nhất), các
+  cảnh báo liên quan.
 - Thao tác: "Tải theo số hiệu", "Theo dõi văn bản này", "Mở thư mục chứa file".
+- Trước khi tải, ước tính tổng dung lượng của các tệp chưa có trong thư mục đích bằng
+  `Content-Length`. Nếu tổng vượt 50.000.000 byte hoặc có tệp không xác định được kích
+  thước, hỏi người dùng trước; lượt tải nền thì lưu metadata nhưng bỏ qua tệp cần xác nhận.
 
 #### 4.3.6 Nhật ký
 
@@ -460,7 +464,9 @@ type Connector interface {
   tên miền.
 - Dùng `ETag` / `If-Modified-Since`; `304` thì bỏ qua.
 - Thử lại tối đa 2 lần với khoảng chờ tăng dần cho lỗi 5xx và timeout.
-- Giới hạn kích thước: trang HTML 5 MB, file PDF 50 MB.
+- Giới hạn kích thước: trang HTML 5 MB, mỗi file PDF 50 MiB. Tổng tệp tải theo thao tác
+  của người dùng vượt 50.000.000 byte hoặc có kích thước chưa xác định thì phải được xác
+  nhận trước khi tải.
 - Hỗ trợ proxy hệ thống.
 
 ### 5.6 Đường ống xử lý một lần quét
@@ -771,7 +777,7 @@ Tất cả dưới `http://127.0.0.1:<cổng>/api`, yêu cầu header `X-Q3-Toke
 | POST | `/sources/test` | Kiểm tra một URL nguồn trước khi thêm |
 | GET | `/documents` | Thư viện văn bản |
 | GET | `/documents/{id}` | Chi tiết, quan hệ, cảnh báo liên quan |
-| POST | `/documents/fetch` | Tải văn bản theo số hiệu từ nguồn tầng 1 |
+| POST | `/documents/fetch` | Tải văn bản theo số hiệu từ nguồn tầng 1; nếu tổng tệp vượt ngưỡng hoặc chưa rõ kích thước, trả ước tính để UI hỏi xác nhận rồi gọi lại với `confirm_large: true` |
 | GET | `/documents/{id}/file/{n}` | Mở file gốc |
 | POST | `/scan` | Quét ngay |
 | GET | `/scans` | Nhật ký quét |

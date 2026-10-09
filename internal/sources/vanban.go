@@ -347,6 +347,61 @@ func ParseVanbanDetail(page, portalID string) (*DocInfo, error) {
 
 var unsafeName = regexp.MustCompile(`[<>:"/\\|?*\x00-\x1f]`)
 
+// DownloadConfirmationLimit is the combined size at which a manual download
+// asks the user before fetching official attachments.
+const DownloadConfirmationLimit int64 = 50_000_000
+
+// DownloadEstimate describes the attachment files that are not already in
+// the destination folder.
+type DownloadEstimate struct {
+	TotalBytes   int64 `json:"total_bytes"`
+	UnknownFiles int   `json:"unknown_files"`
+	PendingFiles int   `json:"pending_files"`
+}
+
+// RequiresConfirmation is true when the known total exceeds 50 MB or at least
+// one pending file has no reliable declared size.
+func (e DownloadEstimate) RequiresConfirmation() bool {
+	return e.TotalBytes > DownloadConfirmationLimit || e.UnknownFiles > 0
+}
+
+// EstimateDownload checks the sizes of attachments that would be downloaded.
+// Existing files are excluded because DownloadFiles will leave them in place.
+func EstimateDownload(ctx context.Context, fc *fetch.Client, fileURLs []string, dir string) (DownloadEstimate, error) {
+	var estimate DownloadEstimate
+	seen := make(map[string]bool, len(fileURLs))
+	for _, raw := range fileURLs {
+		u, err := url.Parse(raw)
+		if err != nil || (u.Scheme != "https" && !fc.Insecure) || !fc.Allowed(u.Host) {
+			return estimate, fmt.Errorf("bỏ qua (không phải liên kết https của cổng Chính phủ): %s", raw)
+		}
+		name, _ := url.PathUnescape(path.Base(u.Path))
+		name = SafeName(name)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		if fi, err := os.Stat(filepath.Join(dir, name)); err == nil && fi.Size() > 0 {
+			continue
+		}
+		estimate.PendingFiles++
+		resp, err := fc.Head(ctx, raw)
+		if err != nil {
+			if errors.Is(err, fetch.ErrBlocked) || errors.Is(err, fetch.ErrRobots) {
+				return estimate, err
+			}
+			estimate.UnknownFiles++
+			continue
+		}
+		if resp.Status < 200 || resp.Status >= 300 || resp.ContentLength < 0 {
+			estimate.UnknownFiles++
+			continue
+		}
+		estimate.TotalBytes += resp.ContentLength
+	}
+	return estimate, nil
+}
+
 // SafeName makes a string usable as a Windows file or folder name.
 func SafeName(s string) string {
 	s = strings.TrimRight(strings.TrimSpace(unsafeName.ReplaceAllString(s, "_")), ". ")
