@@ -12,9 +12,11 @@ menu khay và thông báo có **tiếng Việt và English** (đổi ngay trong 
 
 ![Màn hình Cảnh báo](docs/images/alerts.png)
 
-> **Đổi tên:** ứng dụng trước đây tên **Q3VNLaw**. Bản cũ nâng lên bản này vẫn giữ nguyên chủ
-> đề, cảnh báo, văn bản và cài đặt (xem [mục 9](#9-dữ-liệu-và-quyền-riêng-tư)). Tên kho mã
-> nguồn trên GitHub vẫn là `VLSIT_Q3VNLaw_Chat_Bot`.
+> **Tên công cụ hiện tại: Q3VigilAI.** Q3VNLaw là tên phiên bản cũ, chỉ được nhắc tới khi
+> giải thích nâng cấp và tương thích dữ liệu. Nâng cấp từ bản Q3VNLaw vẫn giữ nguyên chủ đề,
+> cảnh báo, văn bản và cài đặt (xem [mục 9](#9-dữ-liệu-và-quyền-riêng-tư)).
+> Tên kho GitHub giữ nguyên là `VLSIT_Q3VNLaw_Chat_Bot`; đây là tên đường dẫn kho mã nguồn,
+> không phải tên công cụ.
 
 > Q3VigilAI là công cụ theo dõi và tra cứu, không phải dịch vụ tư vấn pháp lý. Tóm tắt và
 > phân loại có thể sai; tình trạng hiệu lực của văn bản là suy luận. Luôn đối chiếu với

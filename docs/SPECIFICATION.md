@@ -1007,7 +1007,7 @@ Rút ra từ việc dùng thật; mỗi mục có test.
 
 | Thay đổi | Lý do |
 |---|---|
-| Đổi tên **Q3VNLaw → Q3VigilAI**: module Go, `cmd/q3vigilai`, `q3vigilai.exe`, tên mutex, lớp cửa sổ khay, biến `Q3VIGILAI_NO_WINDOW`, `q3vigilai.db`, thư mục `%LOCALAPPDATA%\Q3VigilAI` | Yêu cầu của người dùng. Tên kho trên GitHub không đổi |
+| Tên công cụ **Q3VigilAI**: module Go, `cmd/q3vigilai`, `q3vigilai.exe`, tên mutex, lớp cửa sổ khay, biến `Q3VIGILAI_NO_WINDOW`, `q3vigilai.db`, thư mục `%LOCALAPPDATA%\Q3VigilAI`. **Q3VNLaw** chỉ còn trong tương thích bản cũ; slug kho GitHub vẫn là `VLSIT_Q3VNLaw_Chat_Bot` | Đồng bộ tên công cụ; giữ khả năng nâng cấp và đường dẫn kho hiện có |
 | Gói `datadir`: dùng lại dữ liệu của tên cũ (thư mục `Q3VNLaw`, tệp `q3vnlaw.db` cùng `-wal`/`-shm` đổi tên có hoàn lại khi lỗi); mục khởi động cùng Windows của tên cũ bị gỡ và thay bằng mục mới | Người dùng nâng cấp không được mất chủ đề, cảnh báo, văn bản |
 | **Hai ngôn ngữ** Tiếng Việt / English (mục 4.5): gói `i18n`, `GET /api/i18n`, cài đặt `language`, menu khay, tooltip, thông báo, lỗi API, nhãn và trạng thái, giao diện 8 màn hình | Yêu cầu của người dùng. Câu tiếng Việt làm khóa để mã nguồn vẫn đọc được và câu chưa dịch không bao giờ trống |
 | Test **không cho build qua nếu thiếu bản dịch** (duyệt mọi chuỗi trong Go và JavaScript, kiểm placeholder); test tên lĩnh vực, nguồn dựng sẵn, nhãn mức và trạng thái, thông báo và API khi đổi ngôn ngữ | Một chuỗi tiếng Việt lọt vào bản tiếng Anh sẽ không ai thấy cho tới khi người dùng gặp |
